@@ -522,6 +522,7 @@
     <button id="refresh" class="ghost" data-i18n="action.refresh">刷新</button>
     <span id="state-hint" data-i18n="state.ready">就绪</span>
     <button id="lang-toggle" class="ghost" title="Switch language">中文</button>
+    <button id="shutdown" class="ghost" data-i18n="action.shutdown">退出服务</button>
   </div>
 </header>
 
@@ -697,7 +698,11 @@ const $ = (id) => document.getElementById(id);
 const state = {
   project: "", statuses: "", query: "", regex: false, offset: 0, limit: 50,
   entries: [], dirty: new Map(), jobId: null, job: null, poll: null, jobDismissed: null,
-  logs: { status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "", detail: new Map() },
+  shutdown: false,
+  logs: {
+    status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
+    detail: new Map(), signature: "",
+  },
 };
 
 // ---- Language ----
@@ -717,6 +722,9 @@ const MESSAGES = {
     "action.prev": "Previous",
     "action.next": "Next",
     "action.close": "Close",
+    "action.shutdown": "Shut down",
+    "shutdown.confirm": "Stop the local server? This page stops working and the command window exits.",
+    "shutdown.stopped": "The server has stopped. You can close this tab.",
     "state.ready": "Ready",
     "api.heading": "Connection",
     "api.base": "Endpoint",
@@ -809,7 +817,7 @@ const MESSAGES = {
     "log.loading": "Loading…",
     "log.empty": "No matching request records",
     "log.attempt": "attempt {n}",
-    "log.scanned": "scanned {count}",
+    "log.scanned": "{count} files read for this page",
     "log.truncated": "only the newest 2000 were scanned; narrow it with a search",
     "log.damaged": "{count} unreadable",
     "log.page": "Page {n}",
@@ -839,6 +847,9 @@ const MESSAGES = {
     "action.prev": "上一页",
     "action.next": "下一页",
     "action.close": "关闭",
+    "action.shutdown": "退出服务",
+    "shutdown.confirm": "停止本地服务？此页面会失效，运行服务的命令行窗口会退出。",
+    "shutdown.stopped": "服务已停止，可以关闭此页面了。",
     "state.ready": "就绪",
     "api.heading": "连接设置",
     "api.base": "服务地址",
@@ -931,7 +942,7 @@ const MESSAGES = {
     "log.loading": "读取中…",
     "log.empty": "没有匹配的请求记录",
     "log.attempt": "第 {n} 次",
-    "log.scanned": "扫描 {count} 条",
+    "log.scanned": "本页读取 {count} 个文件",
     "log.truncated": "只扫描了最近 2000 条，请用搜索缩小范围",
     "log.damaged": "{count} 条无法解析",
     "log.page": "第 {n} 页",
@@ -1026,7 +1037,7 @@ function notify(text, kind = "info") {
 }
 
 function setBusy(busy) {
-  for (const id of ["import-run", "translate-run", "build-run", "refresh"]) $(id).disabled = busy;
+  for (const id of ["import-run", "translate-run", "build-run", "refresh", "shutdown"]) $(id).disabled = busy;
 }
 
 function clockOf(iso) {
@@ -1081,7 +1092,9 @@ async function selectProject(name, { loadEditor = true, keepDirty = false } = {}
   updateDirtyLabel();
   updateEditorScope();
   if (changed) {
-    state.logs = { ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map() };
+    state.logs = {
+      ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map(), signature: "",
+    };
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
   }
@@ -1335,6 +1348,7 @@ function showJob(job) {
 }
 
 async function pollJob() {
+  if (state.shutdown) return;
   try {
     const { job } = await request("/api/job");
     if (!job) return;
@@ -1356,6 +1370,7 @@ async function pollJob() {
     // stuck in its busy state.
     state.poll = null;
     setBusy(false);
+    if (state.shutdown) return;
     notify(error.message, "error");
   }
 }
@@ -1423,6 +1438,14 @@ async function controlJob(action) {
 }
 
 // ---- Request logs ----
+let logReadSeq = 0;
+
+// Everything a page shows except the row count, so an unchanged page can be left alone.
+function logsSignature(data) {
+  const rows = data.rows.map((row) => `${row.requestId}:${row.status}:${row.durationMs}`).join(",");
+  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.damaged}|${data.truncated}|${rows}`;
+}
+
 function logDetail(requestId) {
   const box = document.createElement("div");
   box.className = "log-detail";
@@ -1494,19 +1517,22 @@ function renderLogRows() {
   }
 }
 
-async function loadLogs() {
+async function loadLogs({ force = false } = {}) {
   if (!state.project) {
     $("log-hint").textContent = t("project.none");
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
     return;
   }
+  const seq = ++logReadSeq;
   const params = new URLSearchParams({
     name: state.project, offset: state.logs.offset, limit: state.logs.limit,
   });
   if (state.logs.status) params.set("status", state.logs.status);
   if (state.logs.query) params.set("q", state.logs.query);
   const data = await request(`/api/logs?${params}`);
+  // A follow tick and a click can be in flight together; only the newest read may paint.
+  if (seq !== logReadSeq) return;
   state.logs.rows = data.rows;
   state.logs.hasMore = data.hasMore;
   const notes = [t("log.scanned", { count: data.scanned })];
@@ -1516,7 +1542,46 @@ async function loadLogs() {
   $("log-page").textContent = t("log.page", { n: Math.floor(data.offset / data.limit) + 1 });
   $("log-prev").disabled = data.offset === 0;
   $("log-next").disabled = !data.hasMore;
+  // Following re-reads the same page every second. Rebuilding rows that did not change would
+  // throw away a selected line and the open detail under the reader.
+  const signature = logsSignature(data);
+  if (!force && signature === state.logs.signature) return;
+  state.logs.signature = signature;
   renderLogRows();
+}
+
+// The list is a snapshot of the directory at read time. Without a re-read it looks frozen while
+// a job keeps appending, so an open panel follows the directory once a second.
+const LOG_FOLLOW_MS = 1000;
+let logFollowTimer = null;
+let logFollowBusy = false;
+let logFollowFailed = false;
+
+async function followLogs() {
+  if (logFollowBusy || !state.project) return;
+  logFollowBusy = true;
+  try {
+    await loadLogs();
+    logFollowFailed = false;
+  } catch (error) {
+    // A failed tick is background work: report it once and stay quiet until a tick succeeds.
+    if (!logFollowFailed) {
+      logFollowFailed = true;
+      notify(error.message, "error");
+    }
+  } finally {
+    logFollowBusy = false;
+  }
+}
+
+function startLogFollow() {
+  if (!logFollowTimer) logFollowTimer = setInterval(followLogs, LOG_FOLLOW_MS);
+}
+
+function stopLogFollow() {
+  clearInterval(logFollowTimer);
+  logFollowTimer = null;
+  logFollowFailed = false;
 }
 
 async function toggleLog(requestId) {
@@ -1548,6 +1613,27 @@ function refreshFileName() {
 $("lang-toggle").addEventListener("click", () => {
   setLanguage(lang === "zh" ? "en" : "zh").catch((error) => notify(error.message, "error"));
 });
+
+// Stopping the server ends every request this page can make, so the page says so and stops
+// asking instead of filling the message bar with connection errors.
+$("shutdown").addEventListener("click", async () => {
+  if (!confirm(t("shutdown.confirm"))) return;
+  try {
+    await request("/api/shutdown", { method: "POST" });
+  } catch (error) {
+    // The server refuses while a task runs; the page stays usable so the task can be stopped first.
+    notify(error.message, "error");
+    return;
+  }
+  state.shutdown = true;
+  clearTimeout(state.poll);
+  state.poll = null;
+  stopLogFollow();
+  setBusy(true);
+  setHint(t("shutdown.stopped"));
+  notify(t("shutdown.stopped"), "ok");
+});
+
 $("import-file-button").addEventListener("click", () => $("import-file").click());
 $("import-file").addEventListener("change", refreshFileName);
 $("project-select").addEventListener("change", (event) => askEditorSwitch(event.target.value));
@@ -1726,7 +1812,12 @@ for (const button of document.querySelectorAll("#review-tabs button")) {
     const logs = button.dataset.panel === "logs";
     $("panel-review").classList.toggle("hidden", logs);
     $("panel-logs").classList.toggle("hidden", !logs);
-    if (logs) await loadLogs().catch((error) => notify(error.message, "error"));
+    if (logs) {
+      startLogFollow();
+      await followLogs();
+    } else {
+      stopLogFollow();
+    }
   });
 }
 
@@ -1749,7 +1840,7 @@ function runLogSearch() {
 }
 $("log-search-run").addEventListener("click", runLogSearch);
 $("log-search").addEventListener("keydown", (event) => { if (event.key === "Enter") runLogSearch(); });
-$("log-refresh").addEventListener("click", () => loadLogs().catch((error) => notify(error.message, "error")));
+$("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
 $("log-prev").addEventListener("click", () => {
   state.logs.offset = Math.max(0, state.logs.offset - state.logs.limit);
   state.logs.open = "";

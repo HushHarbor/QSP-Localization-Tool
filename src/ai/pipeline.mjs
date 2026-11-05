@@ -167,6 +167,9 @@ export async function translateBatches({
     batches: 0, entries: 0, translated: 0, unchanged: 0,
     ok: 0, invalid: 0, serverErrors: 0, stopped: false,
   };
+  // One batch can hold thousands of entries, so the count has to advance per request; waiting
+  // for the batch to be written leaves the progress bar still for the whole batch.
+  onProgress({ phase: "Translating", completed: 0, total });
 
   for (const plan of plans) {
     if (control && !(await control.checkpoint())) {
@@ -179,6 +182,7 @@ export async function translateBatches({
     if (!candidates.length) continue;
     remaining -= candidates.length;
     let written = false;
+    let settled = 0;
 
     const results = await mapConcurrent(candidates, concurrency, async ({ entry, index }) => {
       const controller = new AbortController();
@@ -219,6 +223,12 @@ export async function translateBatches({
         return { status: STATUS.serverError, error: error.message };
       } finally {
         unregister();
+        // An aborted entry never becomes part of `done`, so counting it here would make the
+        // bar jump forward and then back when the batch is written.
+        if (!controller.signal.aborted) {
+          settled++;
+          onProgress({ phase: "Translating", completed: done + settled, total });
+        }
       }
     });
 
