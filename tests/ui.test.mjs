@@ -235,11 +235,35 @@ test("the log routes page through request records and return one in full", async
   assert.equal(firstPage.rows.length, 1);
   assert.equal(firstPage.hasMore, true);
   assert.equal(firstPage.scanned, 2);
+  assert.equal(firstPage.totalFiles, 2);
   assert.equal(firstPage.truncated, false);
+
+  // A limit of 1 file stops before the second record can be seen, so the page reports the cut
+  // instead of pretending the directory holds only one record.
+  const capped = await json(`/api/logs?name=${name}&limit=1&maxScan=1`);
+  assert.equal(capped.scanned, 1);
+  assert.equal(capped.truncated, true);
+
+  const uncapped = await json(`/api/logs?name=${name}&limit=1&maxScan=-1`);
+  assert.equal(uncapped.truncated, false);
+  assert.equal(uncapped.totalFiles, 2);
 
   const secondPage = await json(`/api/logs?name=${name}&limit=1&offset=1`);
   assert.equal(secondPage.rows.length, 1);
   assert.equal(secondPage.hasMore, false);
+
+  // A follower that sends back the version it saw gets a cheap "nothing changed" answer, and the
+  // next write invalidates it.
+  assert.equal(typeof uncapped.version, "string");
+  const quiet = await json(`/api/logs?name=${name}&since=${encodeURIComponent(uncapped.version)}`);
+  assert.equal(quiet.unchanged, true);
+  assert.equal(quiet.rows.length, 0);
+  assert.equal(quiet.scanned, 0);
+
+  writeRequestLog(name, { ...finished, requestId: randomUUID() });
+  const moved = await json(`/api/logs?name=${name}&since=${encodeURIComponent(uncapped.version)}`);
+  assert.equal(moved.unchanged, false);
+  assert.equal(moved.rows.length, 3);
 
   const failures = await json(`/api/logs?name=${name}&status=failed`);
   assert.equal(failures.rows.length, 1);

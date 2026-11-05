@@ -5,12 +5,28 @@ import { extname, join } from "path";
 import { getImporter } from "../../importers/registry.mjs";
 import { loadProject } from "../project/store.mjs";
 import { listPoolBatchIds, readPool, statusSummary } from "../project/pool.mjs";
+import { readPoolSnapshot } from "../project/snapshot.mjs";
 import { buildProject, suggestOutputName } from "./build-project.mjs";
 
-export function projectInfo(name) {
+// `snapshot` keeps the parsed pool in memory, which is worth it only while a job is running and
+// the page keeps asking for the same overview. Any other caller gets a plain read, so nothing is
+// retained past the job.
+export function projectInfo(name, { snapshot = false } = {}) {
   const project = loadProject(name);
   const importer = getImporter(project.importerId);
-  const pool = readPool(project);
+  const pool = snapshot ? readPoolSnapshot(project) : null;
+  const overview = pool || (() => {
+    const plain = readPool(project);
+    return {
+      stats: {
+        batches: plain.batches.length,
+        entries: plain.entries.length,
+        chars: plain.entries.reduce((sum, entry) => sum + entry.source.length, 0),
+      },
+      batches: plain.batches,
+      summary: statusSummary(plain),
+    };
+  })();
   return {
     name,
     importer: { id: importer.id, label: importer.label },
@@ -21,17 +37,13 @@ export function projectInfo(name) {
       importedAt: project.source.importedAt,
       fixedPoint: project.source.fixedPoint,
     },
-    stats: {
-      batches: pool.batches.length,
-      entries: pool.entries.length,
-      chars: pool.entries.reduce((sum, entry) => sum + entry.source.length, 0),
-    },
-    batches: pool.batches.map((batch) => ({
+    stats: overview.stats,
+    batches: overview.batches.map((batch) => ({
       id: batch.batchId,
       name: batch.name,
       entries: batch.entries.length,
     })),
-    summary: statusSummary(pool),
+    summary: overview.summary,
     outputName: suggestOutputName(name),
     rawOutputName: suggestOutputName(name, { raw: true }),
   };

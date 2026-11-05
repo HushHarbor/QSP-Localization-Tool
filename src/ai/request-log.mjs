@@ -12,17 +12,40 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
 const STATUSES = new Set(["started", "completed", "failed"]);
 // Listing stops after this many files so one query stays fast on a long-running project.
-const MAX_SCAN = 2000;
+// `-1` means no limit; the UI exposes the number because a filtered page can need thousands of
+// reads before it fills up.
+const DEFAULT_MAX_SCAN = -1;
+const MAX_SCAN_LIMIT = 200000;
 const MAX_PAGE = 200;
 
 export const requestLogDir = (project) => join(logDir(project), "ai-requests");
 export const requestLogFile = (project, requestId) => join(requestLogDir(project), `${requestId}.json`);
+
+// Every write starts and finishes a record, so a counter answers "is there anything new?"
+// without reading the directory. Rewriting a file leaves the directory timestamp alone, which is
+// why the counter is needed alongside it; the timestamp covers files another process adds or
+// removes. Together they let a follower tick skip the scan entirely when nothing happened.
+let revision = 0;
+
+function directoryState(project) {
+  const dir = requestLogDir(project);
+  try {
+    return existsSync(dir) ? statSync(dir).mtimeMs : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// The token a caller remembers and sends back as `since`. Read after a scan, so a write that
+// lands mid-scan makes the next tick re-read instead of missing the change.
+export const requestLogVersion = (project) => `${revision}:${directoryState(project)}`;
 
 export function writeRequestLog(project, record) {
   if (!record || typeof record.requestId !== "string" || !UUID.test(record.requestId)) {
     throw new Error("AI request log requires a UUID requestId");
   }
   writeJson(requestLogFile(project, record.requestId), record, 2);
+  revision++;
 }
 
 // One complete record. The id is the file name, so a traversal attempt fails validation first.
@@ -73,16 +96,33 @@ function parseStatuses(value) {
 
 // Newest first, from file timestamps. Only the files a page needs are parsed, plus one more
 // match to decide whether another page exists, so an unfiltered first page reads ~limit files.
-export function listRequestLogs(project, { status = "", query = "", offset = 0, limit = 50 } = {}) {
+export function listRequestLogs(project, {
+  status = "", query = "", offset = 0, limit = 50, maxScan = DEFAULT_MAX_SCAN, since = "",
+} = {}) {
   const statuses = parseStatuses(status);
   const needle = String(query || "").trim().toLowerCase();
   const page = Math.max(0, Number(offset) || 0);
   const size = Math.min(MAX_PAGE, Math.max(1, Number(limit) || 50));
+  const requested = Number(maxScan);
+  // Any negative value means no limit; a value that is not a number falls back to the default.
+  const cap = Number.isFinite(requested)
+    ? (requested > 0 ? Math.min(Math.floor(requested), MAX_SCAN_LIMIT) : 0)
+    : 0;
   const result = {
-    rows: [], offset: page, limit: size, hasMore: false, scanned: 0, truncated: false, damaged: 0,
+    rows: [], offset: page, limit: size, hasMore: false,
+    scanned: 0, totalFiles: 0, truncated: false, damaged: 0, unchanged: false,
   };
+  // A follower sends the token it saw last time; an unchanged directory needs no scan at all.
+  if (since && since === requestLogVersion(project)) {
+    result.unchanged = true;
+    result.version = since;
+    return result;
+  }
   const dir = requestLogDir(project);
-  if (!existsSync(dir)) return result;
+  if (!existsSync(dir)) {
+    result.version = requestLogVersion(project);
+    return result;
+  }
 
   const files = readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && FILE_NAME.test(entry.name))
@@ -92,9 +132,10 @@ export function listRequestLogs(project, { status = "", query = "", offset = 0, 
     })
     .sort((left, right) => right.mtimeMs - left.mtimeMs || left.name.localeCompare(right.name));
 
+  result.totalFiles = files.length;
   let matched = 0;
   for (const file of files) {
-    if (result.scanned >= MAX_SCAN) {
+    if (cap && result.scanned >= cap) {
       result.truncated = true;
       break;
     }
@@ -120,6 +161,7 @@ export function listRequestLogs(project, { status = "", query = "", offset = 0, 
     }
     result.rows.push({ ...summaryOf(record), sizeBytes: statSync(file.path).size });
   }
+  result.version = requestLogVersion(project);
   return result;
 }
 

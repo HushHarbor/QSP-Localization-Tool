@@ -49,6 +49,9 @@ async function execute() {
         options: workerData.options,
         control,
         onProgress,
+        // The pool lives on disk and this thread is the one rewriting it; the main thread keeps a
+        // cached copy for the page and needs to know which file to refresh.
+        onBatchWritten: (batchId) => parentPort.postMessage({ type: "pool-write", batchId }),
       });
     case "build":
       return buildProject({

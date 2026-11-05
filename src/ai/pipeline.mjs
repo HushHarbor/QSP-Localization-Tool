@@ -116,13 +116,16 @@ async function translateEntry({ entry, current, context, importer, prompts, chat
   throw failure;
 }
 
-async function mapConcurrent(items, width, fn) {
+async function mapConcurrent(items, width, fn, shouldStop = () => false) {
   const results = new Array(items.length);
   let next = 0;
   const run = async () => {
     for (;;) {
       const index = next++;
       if (index >= items.length) return;
+      // Stopping ends the wave instead of walking the rest of it. An entry that is pulled after
+      // the request is no longer needed only produces an interruption, never a translation.
+      if (shouldStop()) return;
       results[index] = await fn(items[index], index);
     }
   };
@@ -139,7 +142,8 @@ function batchRange(batches, { from, to }) {
 // Translate every non-ok entry in the selected batches. A batch is written once, after its
 // requests finish, so the pool never records a half-applied wave.
 export async function translateBatches({
-  project, importer, prompts, transport, options = {}, control = null, onProgress = () => {},
+  project, importer, prompts, transport, options = {}, control = null,
+  onProgress = () => {}, onBatchWritten = () => {},
 }) {
   const {
     concurrency = 6, attempts = 2, contextEntriesPerSide = 3, limit,
@@ -192,6 +196,9 @@ export async function translateBatches({
       } catch (error) {
         controller.abort(error);
       }
+      // The task stopped between pulling this entry and starting its request. Nothing was sent,
+      // so nothing should be recorded as a failed request.
+      if (controller.signal.aborted) return { aborted: true };
       try {
         const translation = await translateEntry({
           entry,
@@ -230,7 +237,7 @@ export async function translateBatches({
           onProgress({ phase: "Translating", completed: done + settled, total });
         }
       }
-    });
+    }, () => Boolean(control?.stopsDispatching));
 
     results.forEach((result, position) => {
       const { index } = candidates[position];
@@ -253,7 +260,11 @@ export async function translateBatches({
       else if (target.status === STATUS.serverError) summary.serverErrors++;
     });
 
-    if (written) writePoolBatch(project, batch.batchId, batch.name, batch.entries);
+    if (written) {
+      writePoolBatch(project, batch.batchId, batch.name, batch.entries);
+      // The caller may hold a cached copy of the pool; this tells it which file to re-read.
+      onBatchWritten(batch.batchId);
+    }
     summary.batches++;
     summary.entries += results.filter((result) => result && !result.aborted).length;
     onProgress({ phase: "Translating", completed: done, total });

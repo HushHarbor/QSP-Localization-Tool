@@ -16,6 +16,8 @@ import { readPromptTable, writePromptTable } from "../../ai/prompts.mjs";
 import { listRequestLogs, readRequestLog } from "../../ai/request-log.mjs";
 import { projectInfo } from "../../application/project-info.mjs";
 import { editPool, listEntries, reopenPool } from "../../application/edit-pool.mjs";
+import { invalidatePoolSnapshot, readPoolSnapshot } from "../../project/snapshot.mjs";
+import { notePoolBatchWritten } from "../../project/pool-writes.mjs";
 import {
   glossaryFile, listProjectsByCompatibility, loadProject, projectRulesData,
   readGlossary, readImporterRulesData, resolveInput, rulesFile, scopeGlossaryFile,
@@ -26,7 +28,13 @@ import { createJobManager } from "./jobs.mjs";
 const UI_HTML_PATH = new URL("./ui.html", import.meta.url);
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 256 * 1024 * 1024;
-const jobManager = createJobManager();
+const jobManager = createJobManager({
+  // A translation job runs in a worker thread, so its pool writes arrive here as messages; the
+  // cached pool needs to know which batch file to re-read.
+  onPoolWrite: (project, batchId) => notePoolBatchWritten(project, batchId),
+  // The cached pool exists to follow a running job; once the job stops it is dead weight.
+  onJobEnd: (project) => invalidatePoolSnapshot(project),
+});
 
 function sendJson(response, status, value) {
   response.writeHead(status, {
@@ -140,8 +148,8 @@ function tolerate(attempt, fallback) {
   }
 }
 
-function projectDetails(name) {
-  const info = projectInfo(name);
+function projectDetails(name, options) {
+  const info = projectInfo(name, options);
   const importer = getImporter(info.importer.id);
   return {
     ...info,
@@ -154,6 +162,15 @@ function statusesOf(searchParams) {
   const values = searchParams.getAll("status").flatMap((value) => value.split(","));
   const statuses = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
   return statuses.length ? statuses : null;
+}
+
+// Absent means the library default; the form sends -1 for "no limit".
+function maxScanOf(searchParams) {
+  const raw = searchParams.get("maxScan");
+  if (raw === null) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < -1) throw fail("maxScan must be -1 or a positive integer");
+  return value;
 }
 
 function createHandler(onShutdown) {
@@ -197,19 +214,33 @@ function createHandler(onShutdown) {
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/project") {
-        sendJson(response, 200, projectDetails(requireProject(url.searchParams.get("name"))));
+        const name = requireProject(url.searchParams.get("name"));
+        // Only a running job needs the cached pool; otherwise the read is plain and retains
+        // nothing.
+        sendJson(response, 200, projectDetails(name, { snapshot: jobManager.isRunning() }));
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/entries") {
         const name = requireProject(url.searchParams.get("name"));
+        // `since` is only meaningful while the snapshot exists, which is while a job runs.
+        const snapshot = jobManager.isRunning();
         const result = listEntries(name, {
           statuses: statusesOf(url.searchParams),
           query: url.searchParams.get("q") || "",
           regex: url.searchParams.get("regex") === "true",
           offset: Number(url.searchParams.get("offset") || 0),
           limit: Number(url.searchParams.get("limit") || 50),
+          since: snapshot ? (url.searchParams.get("since") || "") : "",
+          fresh: url.searchParams.get("fresh") === "true",
+          snapshot,
         });
+        // An unchanged pool skips the rows entirely: the caller already has them.
+        if (result.unchanged) {
+          sendJson(response, 200, { version: result.version, unchanged: true, summary: result.summary });
+          return;
+        }
         sendJson(response, 200, {
+          version: result.version,
           total: result.total,
           offset: result.offset,
           limit: result.limit,
@@ -238,6 +269,8 @@ function createHandler(onShutdown) {
           query: url.searchParams.get("q") || "",
           offset: Number(url.searchParams.get("offset") || 0),
           limit: Number(url.searchParams.get("limit") || 50),
+          maxScan: maxScanOf(url.searchParams),
+          since: url.searchParams.get("since") || "",
         }));
         return;
       }
@@ -450,6 +483,9 @@ function createHandler(onShutdown) {
           if (typeof body[field] === "string" && body[field].trim()) requestOptions[field] = body[field].trim();
         }
         const options = resolveAiOptions(requestOptions, readApiConfig());
+        // The page compares against the pool as it stood when the job started, so the snapshot is
+        // taken before the first batch can land. It is released when the job ends.
+        readPoolSnapshot(loadProject(name));
         const active = jobManager.start({ type: "translate", project: name, options });
         sendJson(response, 202, { job: active.id });
         return;

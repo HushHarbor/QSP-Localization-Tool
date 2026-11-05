@@ -664,7 +664,8 @@
       </div>
       <div class="row" style="margin-top:.6rem">
         <span class="muted" id="log-hint" data-i18n="project.none">未选择项目</span>
-        <span></span>
+        <input id="log-max-scan" type="number" min="-1" step="1" value="-1" style="flex:0 0 8rem"
+          data-i18n-aria="logs.maxScanTitle" data-i18n-ph="logs.maxScanTitle" placeholder="-1">
         <button id="log-refresh" class="ghost" style="flex:0 0 auto" data-i18n="action.refresh">刷新</button>
       </div>
       <div class="log-entry" id="log-list" style="margin-top:.6rem"></div>
@@ -698,10 +699,10 @@ const $ = (id) => document.getElementById(id);
 const state = {
   project: "", statuses: "", query: "", regex: false, offset: 0, limit: 50,
   entries: [], dirty: new Map(), jobId: null, job: null, poll: null, jobDismissed: null,
-  shutdown: false,
+  shutdown: false, entriesVersion: "", entriesScope: "",
   logs: {
     status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
-    detail: new Map(), signature: "",
+    detail: new Map(), signature: "", maxScan: -1, version: "", scope: "",
   },
 };
 
@@ -817,10 +818,11 @@ const MESSAGES = {
     "log.loading": "Loading…",
     "log.empty": "No matching request records",
     "log.attempt": "attempt {n}",
-    "log.scanned": "{count} files read for this page",
-    "log.truncated": "only the newest 2000 were scanned; narrow it with a search",
+    "log.scanned": "read {scanned} of {total} log files",
+    "log.truncated": "stopped at the scan limit; older records were not read",
     "log.damaged": "{count} unreadable",
     "log.page": "Page {n}",
+    "logs.maxScanTitle": "Log files one page may scan (-1 = all)",
     "job.title": "Job",
     "job.titleOf": "Job · {type}",
     "job.pause": "Pause",
@@ -942,10 +944,11 @@ const MESSAGES = {
     "log.loading": "读取中…",
     "log.empty": "没有匹配的请求记录",
     "log.attempt": "第 {n} 次",
-    "log.scanned": "本页读取 {count} 个文件",
-    "log.truncated": "只扫描了最近 2000 条，请用搜索缩小范围",
+    "log.scanned": "已读取 {scanned} / {total} 个日志文件",
+    "log.truncated": "已达扫描上限，较早的记录未读取",
     "log.damaged": "{count} 条无法解析",
     "log.page": "第 {n} 页",
+    "logs.maxScanTitle": "每页最多扫描的文件数（-1 为全部）",
     "job.title": "任务",
     "job.titleOf": "任务 · {type}",
     "job.pause": "暂停",
@@ -1093,7 +1096,8 @@ async function selectProject(name, { loadEditor = true, keepDirty = false } = {}
   updateEditorScope();
   if (changed) {
     state.logs = {
-      ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map(), signature: "",
+      ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map(),
+      signature: "", version: "", scope: "",
     };
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
@@ -1205,13 +1209,28 @@ function updateDirtyLabel() {
   $("apply-changed").disabled = !count;
 }
 
-async function loadEntries({ keepDirty = false } = {}) {
+async function loadEntries({ keepDirty = false, force = false } = {}) {
   if (!state.project) return;
+  // The remembered version only describes the current filter and page; a different question must
+  // not be answered with the previous "nothing changed".
+  const scope = [state.statuses, state.query, state.regex, state.offset, state.limit].join("|");
+  if (scope !== state.entriesScope) {
+    state.entriesScope = scope;
+    state.entriesVersion = "";
+  }
   const params = new URLSearchParams({ name: state.project, offset: state.offset, limit: state.limit });
   if (state.statuses) params.set("status", state.statuses);
   if (state.query) params.set("q", state.query);
   if (state.regex) params.set("regex", "true");
+  if (force) params.set("fresh", "true");
+  else if (state.entriesVersion) params.set("since", state.entriesVersion);
   const data = await request(`/api/entries?${params}`);
+  if (data.version) state.entriesVersion = data.version;
+  if (data.unchanged) {
+    // Same pool, same question: the rows on screen are still the answer.
+    if (data.summary) renderSummary(data.summary);
+    return;
+  }
   state.entries = data.rows;
   // Keep only edits whose row survived the reload; anything else is gone either way.
   const kept = keepDirty
@@ -1223,9 +1242,13 @@ async function loadEntries({ keepDirty = false } = {}) {
   renderSummary(data.summary);
   $("entries-hint").textContent = t("review.matched", { total: data.total, shown: data.rows.length });
   $("page-hint").textContent = `${data.offset + 1}–${data.offset + data.rows.length} / ${data.total}`;
+  renderEntries(data.rows);
+}
+
+function renderEntries(rows) {
   const container = $("entries");
-  container.innerHTML = data.rows.length ? "" : `<div class="hint">${esc(t("review.empty"))}</div>`;
-  for (const row of data.rows) {
+  container.innerHTML = rows.length ? "" : `<div class="hint">${esc(t("review.empty"))}</div>`;
+  for (const row of rows) {
     const item = document.createElement("div");
     item.className = "entry";
     item.dataset.id = row.id;
@@ -1276,7 +1299,7 @@ async function reopenEntry(id) {
     body: JSON.stringify({ project: state.project, ids: [id] }),
   });
   notify(t("entry.reopened", { count: result.updated }), "ok");
-  await loadEntries();
+  await loadEntries({ force: true });
 }
 
 async function applyEdits(changes) {
@@ -1287,7 +1310,7 @@ async function applyEdits(changes) {
     body: JSON.stringify({ project: state.project, changes }),
   });
   notify(t("review.applied", { count: result.updated }), "ok");
-  await loadEntries();
+  await loadEntries({ force: true });
   const info = await request(`/api/project?name=${encodeURIComponent(state.project)}`);
   renderSummary(info.summary);
 }
@@ -1345,6 +1368,7 @@ function showJob(job) {
   $("job-pause").disabled = !running || !job.controllable;
   $("job-resume").disabled = !running || !job.controllable;
   $("job-stop").disabled = !running || !job.controllable;
+  syncFollow();
 }
 
 async function pollJob() {
@@ -1396,9 +1420,7 @@ async function refreshAfterJob(job) {
     await loadState(job.project);
   } else if (state.project) {
     await selectProject(state.project, { loadEditor: false });
-    if (job.type === "translate" && !$("panel-logs").classList.contains("hidden")) {
-      await loadLogs();
-    }
+    if (job.type === "translate" && logsPanelOpen()) await loadLogs({ force: true });
   }
 }
 
@@ -1437,13 +1459,62 @@ async function controlJob(action) {
   }
 }
 
+// ---- Following ----
+// One tick serves both panels that change on their own: the entry list while a job runs, and the
+// request log while it is open. Both ask the server for the version they already have, so an
+// idle tick costs a stat instead of a rescan.
+const FOLLOW_MS = 1000;
+let followTimer = null;
+let followBusy = false;
+let followFailed = false;
+
+function logsPanelOpen() {
+  return !$("panel-logs").classList.contains("hidden");
+}
+
+function jobRunning() {
+  return state.job?.status === "running";
+}
+
+async function followTick() {
+  if (followBusy || state.shutdown) return;
+  followBusy = true;
+  try {
+    if (logsPanelOpen()) await loadLogs();
+    // Unsaved edits are the one thing a rebuild would throw away, so the list waits for them.
+    if (jobRunning() && state.project && !state.dirty.size) {
+      await loadEntries({ keepDirty: true });
+    }
+    followFailed = false;
+  } catch (error) {
+    // A failed tick is background work: report it once and stay quiet until a tick succeeds.
+    if (!followFailed) {
+      followFailed = true;
+      notify(error.message, "error");
+    }
+  } finally {
+    followBusy = false;
+  }
+}
+
+// Only the panels that can change need the ticker; an idle page asks the server nothing.
+function syncFollow() {
+  const wanted = !state.shutdown && (logsPanelOpen() || jobRunning());
+  if (wanted && !followTimer) followTimer = setInterval(followTick, FOLLOW_MS);
+  if (!wanted && followTimer) {
+    clearInterval(followTimer);
+    followTimer = null;
+    followFailed = false;
+  }
+}
+
 // ---- Request logs ----
 let logReadSeq = 0;
 
 // Everything a page shows except the row count, so an unchanged page can be left alone.
 function logsSignature(data) {
   const rows = data.rows.map((row) => `${row.requestId}:${row.status}:${row.durationMs}`).join(",");
-  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.damaged}|${data.truncated}|${rows}`;
+  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.totalFiles}|${data.damaged}|${data.truncated}|${rows}`;
 }
 
 function logDetail(requestId) {
@@ -1525,17 +1596,30 @@ async function loadLogs({ force = false } = {}) {
     return;
   }
   const seq = ++logReadSeq;
+  // The remembered version only describes the current filter and page. Changing either one asks
+  // a different question, so the cached answer must not be reused.
+  const scope = [state.logs.status, state.logs.query, state.logs.offset, state.logs.limit, state.logs.maxScan].join("|");
+  if (scope !== state.logs.scope) {
+    state.logs.scope = scope;
+    state.logs.version = "";
+  }
   const params = new URLSearchParams({
     name: state.project, offset: state.logs.offset, limit: state.logs.limit,
+    maxScan: state.logs.maxScan,
   });
   if (state.logs.status) params.set("status", state.logs.status);
   if (state.logs.query) params.set("q", state.logs.query);
+  // A manual refresh ignores the remembered version so it always rescans; a follow tick asks the
+  // server to skip the work when the directory and the writer counter both stand still.
+  if (!force && state.logs.version) params.set("since", state.logs.version);
   const data = await request(`/api/logs?${params}`);
   // A follow tick and a click can be in flight together; only the newest read may paint.
   if (seq !== logReadSeq) return;
+  if (data.version) state.logs.version = data.version;
+  if (data.unchanged) return;
   state.logs.rows = data.rows;
   state.logs.hasMore = data.hasMore;
-  const notes = [t("log.scanned", { count: data.scanned })];
+  const notes = [t("log.scanned", { scanned: data.scanned, total: data.totalFiles })];
   if (data.truncated) notes.push(t("log.truncated"));
   if (data.damaged) notes.push(t("log.damaged", { count: data.damaged }));
   $("log-hint").textContent = notes.join(" · ");
@@ -1548,40 +1632,6 @@ async function loadLogs({ force = false } = {}) {
   if (!force && signature === state.logs.signature) return;
   state.logs.signature = signature;
   renderLogRows();
-}
-
-// The list is a snapshot of the directory at read time. Without a re-read it looks frozen while
-// a job keeps appending, so an open panel follows the directory once a second.
-const LOG_FOLLOW_MS = 1000;
-let logFollowTimer = null;
-let logFollowBusy = false;
-let logFollowFailed = false;
-
-async function followLogs() {
-  if (logFollowBusy || !state.project) return;
-  logFollowBusy = true;
-  try {
-    await loadLogs();
-    logFollowFailed = false;
-  } catch (error) {
-    // A failed tick is background work: report it once and stay quiet until a tick succeeds.
-    if (!logFollowFailed) {
-      logFollowFailed = true;
-      notify(error.message, "error");
-    }
-  } finally {
-    logFollowBusy = false;
-  }
-}
-
-function startLogFollow() {
-  if (!logFollowTimer) logFollowTimer = setInterval(followLogs, LOG_FOLLOW_MS);
-}
-
-function stopLogFollow() {
-  clearInterval(logFollowTimer);
-  logFollowTimer = null;
-  logFollowFailed = false;
 }
 
 async function toggleLog(requestId) {
@@ -1628,7 +1678,7 @@ $("shutdown").addEventListener("click", async () => {
   state.shutdown = true;
   clearTimeout(state.poll);
   state.poll = null;
-  stopLogFollow();
+  syncFollow();
   setBusy(true);
   setHint(t("shutdown.stopped"));
   notify(t("shutdown.stopped"), "ok");
@@ -1637,7 +1687,9 @@ $("shutdown").addEventListener("click", async () => {
 $("import-file-button").addEventListener("click", () => $("import-file").click());
 $("import-file").addEventListener("change", refreshFileName);
 $("project-select").addEventListener("change", (event) => askEditorSwitch(event.target.value));
-$("refresh").addEventListener("click", () => loadState());
+$("refresh").addEventListener("click", () => {
+  loadState(state.project).catch((error) => notify(error.message, "error"));
+});
 
 $("api-save").addEventListener("click", async () => {
   try {
@@ -1812,12 +1864,8 @@ for (const button of document.querySelectorAll("#review-tabs button")) {
     const logs = button.dataset.panel === "logs";
     $("panel-review").classList.toggle("hidden", logs);
     $("panel-logs").classList.toggle("hidden", !logs);
-    if (logs) {
-      startLogFollow();
-      await followLogs();
-    } else {
-      stopLogFollow();
-    }
+    syncFollow();
+    if (logs) await loadLogs().catch((error) => notify(error.message, "error"));
   });
 }
 
@@ -1840,7 +1888,15 @@ function runLogSearch() {
 }
 $("log-search-run").addEventListener("click", runLogSearch);
 $("log-search").addEventListener("keydown", (event) => { if (event.key === "Enter") runLogSearch(); });
-$("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
+// The limit only applies to the next read, so a half-typed number never triggers its own query.
+$("log-max-scan").addEventListener("change", () => {
+  const value = Number($("log-max-scan").value);
+  state.logs.maxScan = Number.isInteger(value) && value >= -1 ? value : -1;
+  $("log-max-scan").value = state.logs.maxScan;
+  state.logs.offset = 0;
+  state.logs.open = "";
+  loadLogs({ force: true }).catch((error) => notify(error.message, "error"));
+});$("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
 $("log-prev").addEventListener("click", () => {
   state.logs.offset = Math.max(0, state.logs.offset - state.logs.limit);
   state.logs.open = "";

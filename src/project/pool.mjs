@@ -9,6 +9,7 @@ import { atomicWrite, poolDir, poolDirIn, readJson } from "./store.mjs";
 import {
   STATUS, STATUS_VALUES, assertPoolEntry, summarize,
 } from "./model.mjs";
+import { notePoolBatchWritten } from "./pool-writes.mjs";
 
 const BATCH_FILE = /^(b-\d{4,})\.json$/;
 
@@ -54,6 +55,8 @@ export function writePoolBatch(project, batchId, name, entries, { root = null } 
   }
   if (!Array.isArray(entries)) throw new Error("Pool batch entries must be an array");
   atomicWrite(batchPath(project, batchId, root), JSON.stringify({ batchId, name, entries }, null, 1));
+  // A cached read of this pool can refresh this one file instead of all of them.
+  if (!root) notePoolBatchWritten(project.name, batchId);
 }
 
 // Batch files are named by id, so listing them gives the batch order without reading them.

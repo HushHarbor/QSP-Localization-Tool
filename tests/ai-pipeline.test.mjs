@@ -144,6 +144,31 @@ test("a stopped control performs no requests", async (t) => {
   assert.equal(summary.stopped, true);
 });
 
+test("stopping mid-wave stops dispatching and logs only the requests it sent", async (t) => {
+  const name = uniqueName("ai-stop-mid");
+  setup(t, name);
+  const control = new TaskControl();
+  let calls = 0;
+  const summary = await translateProject({
+    name,
+    options: { concurrency: 1, attempts: 1 },
+    control,
+    transport: async () => {
+      calls++;
+      // The user presses stop while the first request is in flight. The four entries that were
+      // never sent must not be pulled, and they must not each record an interruption either.
+      control.request("stop");
+      return "译文";
+    },
+  });
+  assert.equal(calls, 1);
+  assert.equal(summary.stopped, true);
+  const logs = readdirSync(join(logDir(name), "ai-requests"))
+    .map((file) => JSON.parse(readFileSync(join(logDir(name), "ai-requests", file), "utf8")));
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].status, "completed");
+});
+
 // A local endpoint that answers like Chat Completions, so the test observes the real wire
 // exchange instead of a stand-in transport.
 async function chatServer(t, handler) {

@@ -38,7 +38,7 @@ function validateControl(job, body) {
   }
 }
 
-export function createJobManager() {
+export function createJobManager({ onPoolWrite = () => {}, onJobEnd = () => {} } = {}) {
   let job = null;
 
   const finish = (active, status, details = {}) => {
@@ -52,12 +52,15 @@ export function createJobManager() {
     } finally {
       active.releaseProjectLock = null;
     }
+    // Whatever the job cached for itself is no longer needed once it stops.
+    onJobEnd(active.project);
   };
 
   return {
     requireIdle() {
       if (job?.status === "running") throw Object.assign(new Error("Another task is already running"), { status: 409 });
     },
+    isRunning: () => job?.status === "running",
     snapshot: () => snapshot(job),
     control(body) {
       validateControl(job, body);
@@ -101,6 +104,8 @@ export function createJobManager() {
           setProgress(active, message.phase, message.completed, message.total);
         } else if (message.type === "control-state") {
           active.controlState = message.state;
+        } else if (message.type === "pool-write") {
+          onPoolWrite(active.project, message.batchId);
         } else if (message.type === "control-error") {
           active.logs.push({ at: new Date().toISOString(), level: "error", text: message.error });
         } else if (message.type === "result") {
