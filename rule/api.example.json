@@ -1,0 +1,16 @@
+{
+  "baseUrl": "http://127.0.0.1:1234/v1",
+  "model": "your-model-name",
+  "apiKey": "",
+  "apiStyle": "auto",
+  "disableThinking": true,
+  "temperature": 0.3,
+  "extraHeaders": {},
+  "extraBody": {},
+  "concurrency": 6,
+  "attempts": 2,
+  "contextEntriesPerSide": 3,
+  "timeoutMs": 180000,
+  "maxOutputTokens": 4096,
+  "requestFingerprintEnabled": true
+}
