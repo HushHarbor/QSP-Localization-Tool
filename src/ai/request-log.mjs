@@ -10,7 +10,7 @@ import { logDir, readJson, writeJson } from "../project/store.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
-const STATUSES = new Set(["started", "completed", "failed"]);
+const STATUSES = new Set(["started", "completed", "failed", "aborted"]);
 const MAX_PAGE = 200;
 
 export const requestLogDir = (project) => join(logDir(project), "ai-requests");
@@ -102,7 +102,7 @@ export function listRequestLogs(project, {
   const size = Math.min(MAX_PAGE, Math.max(1, Number(limit) || 50));
   const result = {
     rows: [], offset: page, limit: size, hasMore: false,
-    scanned: 0, totalFiles: 0, damaged: 0, unchanged: false,
+    scanned: 0, totalFiles: 0, damaged: 0, unchanged: false, counts: {},
   };
   // A follower sends the token it saw last time; an unchanged directory needs no scan at all.
   if (since && since === requestLogVersion(project)) {
@@ -139,6 +139,10 @@ export function listRequestLogs(project, {
       result.damaged++;
       continue;
     }
+    // Counted before the filters: the summary describes the records this pass read, not the page
+    // it produced, and it costs nothing because the file is already parsed.
+    const recordStatus = typeof record.status === "string" ? record.status : "unknown";
+    result.counts[recordStatus] = (result.counts[recordStatus] || 0) + 1;
     if (statuses && !statuses.has(record.status)) continue;
     if (needle && !searchable(record).includes(needle)) continue;
     matched++;

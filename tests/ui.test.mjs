@@ -236,6 +236,11 @@ test("the log routes page through request records and return one in full", async
   assert.equal(firstPage.hasMore, true);
   assert.equal(firstPage.scanned, 2);
   assert.equal(firstPage.totalFiles, 2);
+  // The summary counts what this pass read, so it does not change with the filter or the page.
+  assert.deepEqual(firstPage.counts, { completed: 1, failed: 1 });
+
+  const filteredPage = await json(`/api/logs?name=${name}&limit=1&status=failed`);
+  assert.deepEqual(filteredPage.counts, { completed: 1, failed: 1 });
 
   const secondPage = await json(`/api/logs?name=${name}&limit=1&offset=1`);
   assert.equal(secondPage.rows.length, 1);

@@ -169,6 +169,34 @@ test("stopping mid-wave stops dispatching and logs only the requests it sent", a
   assert.equal(logs[0].status, "completed");
 });
 
+test("a request cut off by a stop is logged as aborted, not failed", async (t) => {
+  const name = uniqueName("ai-abort");
+  setup(t, name);
+  const control = new TaskControl();
+  const summary = await translateProject({
+    name,
+    options: { concurrency: 1, attempts: 1 },
+    control,
+    transport: (_system, _prompt, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => {
+        const error = new Error("AI task interrupted");
+        error.name = "AbortError";
+        reject(error);
+      });
+      // Press stop while this request is still in flight, so the abort is what ends it.
+      control.request("stop");
+    }),
+  });
+  assert.equal(summary.stopped, true);
+  assert.equal(summary.serverErrors, 0);
+  const logs = readdirSync(join(logDir(name), "ai-requests"))
+    .map((file) => JSON.parse(readFileSync(join(logDir(name), "ai-requests", file), "utf8")));
+  assert.equal(logs.length, 1);
+  // A stop is not the request's fault: it stays out of the failure list and carries no error.
+  assert.equal(logs[0].status, "aborted");
+  assert.equal(logs[0].error, undefined);
+});
+
 // A local endpoint that answers like Chat Completions, so the test observes the real wire
 // exchange instead of a stand-in transport.
 async function chatServer(t, handler) {

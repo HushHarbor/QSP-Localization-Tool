@@ -6,11 +6,19 @@
 // those files.
 //
 // A write from another process cannot announce anything; that case is covered by the pool
-// directory timestamp, which changes on any atomic rename into it.
+// directory timestamp, which changes on any atomic rename into it. Windows stamps directories
+// lazily, so the timestamp is a hint rather than a guarantee — hence the counter below, which is
+// what makes "nothing changed" reliable for writes this process made.
 const touched = new Map();
+let revision = 0;
+
+// Monotonic, process-wide: any announced write moves it, so a version built from it can never be
+// mistaken for a version taken before that write.
+export const poolRevision = () => revision;
 
 export function notePoolBatchWritten(projectName, batchId) {
   if (!projectName || !batchId) return;
+  revision++;
   let set = touched.get(projectName);
   if (!set) touched.set(projectName, set = new Set());
   set.add(batchId);

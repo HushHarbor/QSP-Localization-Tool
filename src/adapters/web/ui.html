@@ -662,6 +662,7 @@
         <input id="log-search" data-i18n-ph="logs.searchPlaceholder" placeholder="条目 ID、模型、原文或错误信息">
         <button id="log-search-run" class="ghost" style="flex:0 0 auto" data-i18n="action.search">搜索</button>
       </div>
+      <div class="stat-row" id="log-summary"></div>
       <div class="row" style="margin-top:.6rem">
         <span class="muted" id="log-hint" data-i18n="project.none">未选择项目</span>
         <span></span>
@@ -701,7 +702,7 @@ const state = {
   shutdown: false, entriesVersion: "", entriesScope: "",
   logs: {
     status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
-    detail: new Map(), signature: "", version: "", scope: "",
+    detail: new Map(), signature: "", version: "", scope: "", counts: {},
   },
 };
 
@@ -808,6 +809,7 @@ const MESSAGES = {
     "logState.completed": "Completed",
     "logState.failed": "Failed",
     "logState.started": "Unfinished",
+    "logState.aborted": "Interrupted",
     "logState.running": "Running",
     "logState.paused": "Paused",
     "logState.stopped": "Stopped",
@@ -818,6 +820,7 @@ const MESSAGES = {
     "log.empty": "No matching request records",
     "log.attempt": "attempt {n}",
     "log.scanned": "read {scanned} of {total} log files",
+    "log.summaryScope": "Counts cover only the files read in this pass, newest first",
     "log.damaged": "{count} unreadable",
     "log.page": "Page {n}",
     "job.title": "Job",
@@ -932,6 +935,7 @@ const MESSAGES = {
     "logState.completed": "完成",
     "logState.failed": "失败",
     "logState.started": "未完成",
+    "logState.aborted": "已中止",
     "logState.running": "运行中",
     "logState.paused": "已暂停",
     "logState.stopped": "已停止",
@@ -942,6 +946,7 @@ const MESSAGES = {
     "log.empty": "没有匹配的请求记录",
     "log.attempt": "第 {n} 次",
     "log.scanned": "已读取 {scanned} / {total} 个日志文件",
+    "log.summaryScope": "仅统计本次读取的文件，从最新开始",
     "log.damaged": "{count} 条无法解析",
     "log.page": "第 {n} 页",
     "job.title": "任务",
@@ -995,6 +1000,7 @@ async function setLanguage(next) {
   updateDirtyLabel();
   updateEditorScope();
   refreshFileName();
+  renderLogSummary();
   if (state.project) {
     await selectProject(state.project, { loadEditor: false, keepDirty: true });
   } else {
@@ -1092,10 +1098,11 @@ async function selectProject(name, { loadEditor = true, keepDirty = false } = {}
   if (changed) {
     state.logs = {
       ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map(),
-      signature: "", version: "", scope: "",
+      signature: "", version: "", scope: "", counts: {},
     };
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
+    renderLogSummary();
   }
   if (!target) {
     $("project-info").textContent = t("project.none");
@@ -1509,7 +1516,8 @@ let logReadSeq = 0;
 // Everything a page shows except the row count, so an unchanged page can be left alone.
 function logsSignature(data) {
   const rows = data.rows.map((row) => `${row.requestId}:${row.status}:${row.durationMs}`).join(",");
-  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.totalFiles}|${data.damaged}|${rows}`;
+  const counts = JSON.stringify(data.counts || {});
+  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.totalFiles}|${data.damaged}|${counts}|${rows}`;
 }
 
 function logDetail(requestId) {
@@ -1583,6 +1591,26 @@ function renderLogRows() {
   }
 }
 
+function renderLogSummary() {
+  const box = $("log-summary");
+  const counts = state.logs.counts || {};
+  box.replaceChildren();
+  box.title = t("log.summaryScope");
+  // Completed first, then anything unexpected in the order it appeared: the list is what the
+  // reader is scanning for, not an exhaustive status register.
+  const order = ["completed", "failed", "aborted", "started"];
+  const keys = [
+    ...order.filter((status) => counts[status]),
+    ...Object.keys(counts).filter((status) => !order.includes(status)),
+  ];
+  for (const status of keys) {
+    const badge = document.createElement("span");
+    badge.className = `badge ${esc(status)}`;
+    badge.textContent = `${t(`logState.${status}`)} ${counts[status]}`;
+    box.append(badge);
+  }
+}
+
 async function loadLogs({ force = false } = {}) {
   if (!state.project) {
     $("log-hint").textContent = t("project.none");
@@ -1613,6 +1641,8 @@ async function loadLogs({ force = false } = {}) {
   if (data.unchanged) return;
   state.logs.rows = data.rows;
   state.logs.hasMore = data.hasMore;
+  state.logs.counts = data.counts || {};
+  renderLogSummary();
   const notes = [t("log.scanned", { scanned: data.scanned, total: data.totalFiles })];
   if (data.damaged) notes.push(t("log.damaged", { count: data.damaged }));
   $("log-hint").textContent = notes.join(" · ");

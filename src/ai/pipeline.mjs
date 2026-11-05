@@ -66,15 +66,18 @@ function loggedChat(chat, { project, writeLog }) {
       }
       return response;
     } catch (error) {
+      // Pausing or stopping interrupts requests that were already sent. The request itself did not
+      // fail, so it is recorded as `aborted` and stays out of the failure list.
+      const interrupted = Boolean(signal?.aborted) || error?.name === "AbortError";
       try {
         await writeLog(project, {
           ...request,
-          status: "failed",
+          status: interrupted ? "aborted" : "failed",
           finishedAt: new Date().toISOString(),
           durationMs: Date.now() - started,
           http: exchange,
           usage: exchange?.usage || null,
-          error: { name: error.name, message: error.message },
+          ...(interrupted ? {} : { error: { name: error.name, message: error.message } }),
         });
       } catch (logError) {
         throw new AggregateError([error, logError], `Request ${requestId} failed and its log could not be written`);

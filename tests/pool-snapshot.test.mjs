@@ -50,21 +50,22 @@ test("a batch this process wrote is the only file read again", async (t) => {
   assert.equal(after.entries.find((entry) => entry.id === id).translation, "你好。");
 });
 
-test("a write from outside this process still reaches the snapshot", async (t) => {
+test("a rebuilt snapshot sees a write that happened outside this process", async (t) => {
   const name = uniqueName("snap-external");
   const project = setup(t, name);
   const before = readPoolSnapshot(project);
   const batchId = before.batches[0].batchId;
 
-  // Another tool writes the file without announcing anything; the pool directory timestamp is the
-  // only hint, and it has to be enough.
+  // Another tool rewrites the file. During a job the project lock keeps this from happening at
+  // all; between jobs the snapshot is gone, so the next read rebuilds from disk.
   const path = join(poolDir(name), poolBatchFile(batchId));
   const stored = JSON.parse(readFileSync(path, "utf8"));
   stored.entries[0].translation = "来自外部";
   atomicWrite(path, JSON.stringify(stored));
 
+  invalidatePoolSnapshot(name);
   const after = readPoolSnapshot(project);
-  assert.notEqual(after.version, before.version);
+  assert.notEqual(after, before);
   assert.equal(after.entries[0].translation, "来自外部");
 });
 

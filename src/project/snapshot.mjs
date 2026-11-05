@@ -9,13 +9,15 @@
 // when the job ends, so an idle project holds nothing in memory; a read outside a job goes through
 // the plain pool reader instead of here.
 //
-// Change detection costs one stat of the pool directory. Every pool write is an atomic rename
-// into that directory, and a rename updates the directory's modification time, so the timestamp
-// answers "did anything change?" for the whole pool at once.
+// Change detection starts with the batch ids this process announced. The pool directory timestamp
+// is a second, best-effort signal for writes from outside the process: Windows stamps a directory
+// lazily, so it can lag behind an in-place rewrite. That gap is covered by the job lifecycle — the
+// cache lives only while a job runs, the job holds the project write lock, and the cache is dropped
+// when the job ends.
 import { statSync } from "fs";
 import { summarize } from "./model.mjs";
 import { listPoolBatchIds, readPoolBatch } from "./pool.mjs";
-import { forgetPoolWrites, takePoolWrites } from "./pool-writes.mjs";
+import { forgetPoolWrites, poolRevision, takePoolWrites } from "./pool-writes.mjs";
 import { poolDir } from "./store.mjs";
 
 const cache = new Map();
@@ -28,7 +30,11 @@ function directoryVersion(project) {
   }
 }
 
-function flatten(batches) {
+// What a caller remembers and sends back. The write counter is what makes it trustworthy for this
+// process's own writes; the directory timestamp covers the rest when the OS reports it promptly.
+const snapshotVersion = (project) => `${directoryVersion(project)}:${poolRevision()}`;
+
+function summariseBatches(batches) {
   const entries = batches.flatMap((batch) =>
     batch.entries.map((entry) => ({ ...entry, batchId: batch.batchId })));
   const pool = { batches, entries };
@@ -46,7 +52,7 @@ function flatten(batches) {
 }
 
 function store(name, version, batches) {
-  const snapshot = { version, ...flatten(batches) };
+  const snapshot = { version, ...summariseBatches(batches) };
   cache.set(name, snapshot);
   return snapshot;
 }
@@ -54,10 +60,9 @@ function store(name, version, batches) {
 // A full read. Used the first time a job asks for the pool and whenever the change cannot be
 // attributed to this process's own writes.
 function rebuildPoolSnapshot(project) {
-  const version = directoryVersion(project);
   forgetPoolWrites(project.name);
   const batches = listPoolBatchIds(project).map((batchId) => readPoolBatch(project, batchId));
-  return store(project.name, version, batches);
+  return store(project.name, snapshotVersion(project), batches);
 }
 
 export function invalidatePoolSnapshot(name) {
@@ -69,7 +74,7 @@ export const hasPoolSnapshot = (name) => cache.has(name);
 
 export function readPoolSnapshot(project) {
   const name = project.name;
-  const version = directoryVersion(project);
+  const version = snapshotVersion(project);
   const touched = takePoolWrites(name);
   const cached = cache.get(name);
   if (cached && cached.version === version && touched.length === 0) return cached;
