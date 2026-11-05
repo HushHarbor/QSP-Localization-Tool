@@ -1,5 +1,7 @@
 # Imported project data, translations, and generated outputs.
 /project/*
+# The demo project behind the README screenshots is small, made up, and worth reproducing.
+!/project/night-shift/
 
 # Dependencies and operating-system files.
 node_modules/
