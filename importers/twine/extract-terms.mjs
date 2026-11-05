@@ -4,17 +4,20 @@
 // frequency. Ranking free prose by count cannot separate a real term from an internal
 // passage name or a state flag, and a glossary that ships noise is worse than a short one.
 //
-// Sources, in order of authority:
-//   speech   <<speech "Speaker">>              speaker label, the name used in dialogue
-//   hero     class="cg-hero-name"             full character name including surname
-//   family   class="cg-family-name"           relatives named on a character page
-//   field    class="cg-info-label"            dossier field names shown to the player
-//   stat     class="dossier-quickstat-label"  stat names shown to the player
+// Only one source is built in:
+//   speech   <<speech "Speaker">>   the label a story uses to name a speaker
 //
-// Dialogue only ever says the given name; the surname lives on the character page. Both are
-// needed to translate a family consistently, so both are extracted.
+// A story that marks names with a CSS class declares those sites on the command line,
+// one --label per site, from the most authoritative to the least:
+//   --label hero=character-name    full name, including the surname
+//   --label field=stat-label       a label the player reads
+// The class names belong to the story, not to this tool, so nothing story-specific is
+// baked in here.
 //
-// Usage: node importers/twine/extract-terms.mjs <story.html> [--out glossary.json] [--prune]
+// Dialogue often says only a given name while a character page carries the surname. Both
+// sites are worth declaring, because a family has to be translated consistently.
+//
+// Usage: node importers/twine/extract-terms.mjs <story.html> [--label id=css-class]... [--out glossary.json] [--prune]
 //
 // With --out pointing at an existing glossary, the result is merged: existing translations
 // are preserved and only missing terms are added. --prune also drops entries the story no
@@ -27,13 +30,8 @@ import { parseStory } from "./parse.mjs";
 const classText = (name) =>
   new RegExp(`class="[^"]*\\b${name}\\b[^"]*"[^>]*>([\\s\\S]*?)(?=<[a-z/])`, "gi");
 
-const SOURCES = [
-  { id: "speech", pattern: /<<\s*speech\s+"([^"]{1,40})"/g },
-  { id: "hero", pattern: classText("cg-hero-name") },
-  { id: "family", pattern: classText("cg-family-name") },
-  { id: "field", pattern: classText("cg-info-label") },
-  { id: "stat", pattern: classText("dossier-quickstat-label") },
-];
+// Speaker labels need no configuration: the macro is part of the story format.
+const SPEECH = { id: "speech", pattern: /<<\s*speech\s+"([^"]{1,40})"/g };
 
 // A term is a short human-readable label, not markup, an expression, or a generated value.
 function isTerm(value) {
@@ -72,11 +70,33 @@ function collect(passages) {
 }
 
 const [, , path, ...rest] = process.argv;
-if (!path) throw new Error("Usage: node importers/twine/extract-terms.mjs <story.html> [--out glossary.json]");
+if (!path) {
+  throw new Error("Usage: node importers/twine/extract-terms.mjs <story.html> [--label id=css-class]... " +
+    "[--out glossary.json] [--prune]");
+}
 
 const outIndex = rest.indexOf("--out");
 const outPath = outIndex >= 0 ? rest[outIndex + 1] : null;
 const prune = rest.includes("--prune");
+
+// --label id=css-class, repeatable. Order is authority: an earlier source owns a term that
+// several of them produce.
+function declaredLabels(argv) {
+  const sources = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== "--label") continue;
+    const value = argv[i + 1] ?? "";
+    const split = value.indexOf("=");
+    if (split < 1 || split === value.length - 1) throw new Error(`--label expects id=css-class, got "${value}"`);
+    sources.push({ id: value.slice(0, split), pattern: classText(value.slice(split + 1)) });
+  }
+  const ids = sources.map((source) => source.id);
+  if (new Set(ids).size !== ids.length) throw new Error("Each --label needs its own id");
+  if (ids.includes(SPEECH.id)) throw new Error(`The "${SPEECH.id}" source is built in`);
+  return sources;
+}
+
+const SOURCES = [SPEECH, ...declaredLabels(rest)];
 
 const perSource = collect(parseStory(readFileSync(path)));
 
@@ -109,13 +129,15 @@ function mergeGlossary(existing, terms, dropStale) {
 const existing = outPath && existsSync(outPath) ? JSON.parse(readFileSync(outPath, "utf8")) : {};
 const glossary = mergeGlossary(existing, ordered.map(([term]) => term), prune);
 
+// The columns follow whatever ids were declared, so a long id does not shift the output.
+const width = Math.max(...SOURCES.map((source) => source.id.length));
 for (const source of SOURCES) {
-  console.log(`${source.id.padEnd(7)} ${perSource.get(source.id).size} distinct`);
+  console.log(`${source.id.padEnd(width)} ${perSource.get(source.id).size} distinct`);
 }
 console.log(`\nterms: ${ordered.length}`);
 for (const [term, { count, source }] of ordered) {
   const translated = glossary[term] ? " (kept)" : "";
-  console.log(`${String(count).padStart(6)}  ${source.padEnd(7)} ${term}${translated}`);
+  console.log(`${String(count).padStart(6)}  ${source.padEnd(width)} ${term}${translated}`);
 }
 
 if (outPath) {
