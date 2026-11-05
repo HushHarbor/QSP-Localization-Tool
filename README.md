@@ -8,6 +8,8 @@ A local-first tool for importing, translating, reviewing, and exporting text fro
 source -> importer -> project pool -> AI translation -> review -> export
 ```
 
+![The workspace with a project loaded](images/ui-overview.png)
+
 ## Requirements
 
 - Node.js 18 or later.
@@ -55,6 +57,14 @@ Each project stores entries in a translation pool, one file per batch. A transla
 
 Failures are recorded per entry; they do not clear saved translations in the same batch. To return a manually edited entry to the AI queue, use the UI's reopen action or the `reopen` command. The existing text is kept.
 
+The review panel filters by status and searches the source text or the translation. An edit is applied with `应用修改` and becomes `manual`.
+
+![Reviewing entries by status](images/ui-review.png)
+
+A `manual` entry is never submitted again by itself. Its `取消 manual` button keeps the text and puts the entry back in the queue as `server_error`.
+
+![A manually edited entry](images/ui-manual.png)
+
 ## Command line
 
 Commands can also be run through `node src/adapters/cli.mjs`. Use `--help` to see the current command list.
@@ -87,6 +97,12 @@ node src/adapters/cli.mjs ui [--port=4173]
 - `project/<name>/logs/ai-requests/` contains model request and response records. These records may include prompts and project text; review them before sharing.
 
 For command-line imports, `--rules` and `--glossary` can provide project-specific files. In the UI, settings are saved to the selected project's copy. With no project selected, the prompt table and glossary are saved as global defaults.
+
+The status card shows what is translated and how the batch range is selected; the export card writes the rebuilt file to a directory you choose.
+
+![Project status](images/ui-project.png)
+
+![Export](images/ui-export.png)
 
 ## Tests
 
