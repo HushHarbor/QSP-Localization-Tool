@@ -8,7 +8,7 @@ A local-first tool for importing, translating, reviewing, and exporting text fro
 source -> importer -> project pool -> AI translation -> review -> export
 ```
 
-![The workspace with a project loaded](images/ui-overview.png)
+![The workspace with a project loaded](images/en-overview.png)
 
 ## Requirements
 
@@ -20,22 +20,23 @@ The QSP converter is included in the repository. No package installation is need
 
 ## Quick start
 
-1. Copy the API configuration template:
+1. Copy the API settings template and fill in your endpoint and model:
 
    ```powershell
    Copy-Item rule\api.example.json rule\api.json
    ```
 
-2. Set the endpoint and model in `rule/api.json`. An API key can be set there or provided through `OPENAI_API_KEY`. `OPENAI_BASE_URL` and `OPENAI_MODEL` can also be set as environment variables.
-3. Start the browser UI:
+   The same values can be entered in the UI's Connection card, which writes the same file. An API key can come from that file or from `OPENAI_API_KEY`; `OPENAI_BASE_URL` and `OPENAI_MODEL` also work as environment variables.
+2. Start the browser UI:
 
    ```powershell
    npm run ui
    ```
 
-   On Windows, `start-ui.bat` starts the same UI and forwards its arguments.
+   On Windows, `start-ui.bat` starts the same UI and forwards its arguments. The server listens on localhost and opens the page at [http://127.0.0.1:4173](http://127.0.0.1:4173).
+3. Import a source file, translate it, review the result, and export it. Stop the server from the UI or press Ctrl+C.
 
-4. Open [http://127.0.0.1:4173](http://127.0.0.1:4173), import a source, then translate, review, and export it. The server listens on localhost. Stop it from the UI or press Ctrl+C.
+The UI opens in English. The 中文 button in the header switches it to Chinese, and the browser remembers the choice; the screenshots in [README.zh-CN.md](README.zh-CN.md) show the Chinese interface.
 
 ## Supported formats
 
@@ -59,11 +60,11 @@ Failures are recorded per entry; they do not clear saved translations in the sam
 
 The review panel filters by status and searches the source text or the translation. An edit is applied with `应用修改` and becomes `manual`.
 
-![Reviewing entries by status](images/ui-review.png)
+![Reviewing entries by status](images/en-review.png)
 
 A `manual` entry is never submitted again by itself. Its `取消 manual` button keeps the text and puts the entry back in the queue as `server_error`.
 
-![A manually edited entry](images/ui-manual.png)
+![A manually edited entry](images/en-manual.png)
 
 ## Command line
 
@@ -91,7 +92,7 @@ node src/adapters/cli.mjs ui [--port=4173]
 ## Project data
 
 - `rule/` contains global defaults. Each new project gets its own copies of the prompt table, glossary, and importer rules.
-- `rule/api.json` contains local API settings and is ignored by Git. Do not share it if it contains credentials.
+- `rule/api.json` holds the local API settings, written by the Connection card or by hand. Do not share it if it contains a key.
 - `project/<name>/source/` contains source files maintained by the importer. Treat them as read-only; edit translations in the pool or UI.
 - `project/<name>/pool/` contains source text, translations, and statuses.
 - `project/<name>/logs/ai-requests/` contains model request and response records. These records may include prompts and project text; review them before sharing.
@@ -100,9 +101,9 @@ For command-line imports, `--rules` and `--glossary` can provide project-specifi
 
 The status card shows what is translated and how the batch range is selected; the export card writes the rebuilt file to a directory you choose.
 
-![Project status](images/ui-project.png)
+![Project status](images/en-project.png)
 
-![Export](images/ui-export.png)
+![Export](images/en-export.png)
 
 ## Tests
 

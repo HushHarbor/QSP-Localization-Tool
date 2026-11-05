@@ -8,7 +8,7 @@
 源文件 -> 导入器 -> 项目译文池 -> AI 翻译 -> 人工校对 -> 导出
 ```
 
-![已打开项目的工作台](images/ui-overview.png)
+![已打开项目的工作台](images/zh-overview.png)
 
 ## 环境要求
 
@@ -20,22 +20,23 @@ QSP 转换器已包含在仓库中，无需安装依赖。
 
 ## 快速开始
 
-1. 复制 API 配置模板：
+1. 复制 API 设置模板，填入服务端点和模型：
 
    ```powershell
    Copy-Item rule\api.example.json rule\api.json
    ```
 
-2. 在 `rule/api.json` 中设置服务端点和模型。API 密钥可以写在该文件中，也可以通过 `OPENAI_API_KEY` 环境变量提供；`OPENAI_BASE_URL` 和 `OPENAI_MODEL` 也支持使用环境变量。
-3. 启动浏览器界面：
+   也可以在界面的「连接设置」里填同样的值，两者写的是同一个文件。API 密钥可以写在文件里，也可以用 `OPENAI_API_KEY` 环境变量；`OPENAI_BASE_URL` 和 `OPENAI_MODEL` 同样支持环境变量。
+2. 启动浏览器界面：
 
    ```powershell
    npm run ui
    ```
 
-   Windows 上也可以运行 `start-ui.bat`，参数会传给界面。
+   Windows 上也可以运行 `start-ui.bat`，参数会传给界面。服务只监听本机，并自动打开 [http://127.0.0.1:4173](http://127.0.0.1:4173)。
+3. 导入源文件，翻译，校对，然后导出。可在界面中停止服务，也可按 Ctrl+C。
 
-4. 打开 [http://127.0.0.1:4173](http://127.0.0.1:4173)，导入源文件，然后翻译、校对并导出。服务只监听本机，可在界面中停止，也可按 Ctrl+C。
+界面默认英文，点顶部的 English 按钮切成中文，浏览器会记住这个选择。本文截图取自中文界面，[README.md](README.md) 取自英文界面。
 
 ## 支持的格式
 
@@ -59,11 +60,11 @@ QSP 转换器已包含在仓库中，无需安装依赖。
 
 校对面板可按状态筛选，并搜索原文或译文；修改后点「应用修改」，条目标记为 `manual`。
 
-![按状态校对各条目](images/ui-review.png)
+![按状态校对各条目](images/zh-review.png)
 
 `manual` 条目默认不再提交。点它右侧的「取消 manual」，保留文本并以 `server_error` 回到队列。
 
-![一条人工修改的条目](images/ui-manual.png)
+![一条人工修改的条目](images/zh-manual.png)
 
 ## 命令行
 
@@ -91,7 +92,7 @@ node src/adapters/cli.mjs ui [--port=4173]
 ## 项目数据
 
 - 全局 `rule/` 保存默认值。新项目会获得自己的提示词、术语表和导入规则副本。
-- `rule/api.json` 保存本地 API 设置并被 Git 忽略；如其中包含凭据，不要分享该文件。
+- `rule/api.json` 保存本地 API 设置，由界面的「连接设置」或手工写入。如其中包含密钥，不要分享该文件。
 - `project/<name>/source/` 保存由导入器管理的源文件。请将其视为只读；译文应在译文池或界面中修改。
 - `project/<name>/pool/` 保存原文、译文和状态。
 - `project/<name>/logs/ai-requests/` 保存模型请求和响应记录，其中可能包含提示词与项目文本；分享前请先检查内容。
@@ -100,9 +101,9 @@ node src/adapters/cli.mjs ui [--port=4173]
 
 「项目状态」显示翻译进度与本次提交的批次范围，「导出」把重建后的文件写到指定目录。
 
-![项目状态](images/ui-project.png)
+![项目状态](images/zh-project.png)
 
-![导出](images/ui-export.png)
+![导出](images/zh-export.png)
 
 ## 测试
 
