@@ -164,15 +164,6 @@ function statusesOf(searchParams) {
   return statuses.length ? statuses : null;
 }
 
-// Absent means the library default; the form sends -1 for "no limit".
-function maxScanOf(searchParams) {
-  const raw = searchParams.get("maxScan");
-  if (raw === null) return undefined;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < -1) throw fail("maxScan must be -1 or a positive integer");
-  return value;
-}
-
 function createHandler(onShutdown) {
   let shutdownRequested = false;
   return async (request, response) => {
@@ -269,7 +260,6 @@ function createHandler(onShutdown) {
           query: url.searchParams.get("q") || "",
           offset: Number(url.searchParams.get("offset") || 0),
           limit: Number(url.searchParams.get("limit") || 50),
-          maxScan: maxScanOf(url.searchParams),
           since: url.searchParams.get("since") || "",
         }));
         return;

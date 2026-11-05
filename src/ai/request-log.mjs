@@ -11,11 +11,6 @@ import { logDir, readJson, writeJson } from "../project/store.mjs";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
 const STATUSES = new Set(["started", "completed", "failed"]);
-// Listing stops after this many files so one query stays fast on a long-running project.
-// `-1` means no limit; the UI exposes the number because a filtered page can need thousands of
-// reads before it fills up.
-const DEFAULT_MAX_SCAN = -1;
-const MAX_SCAN_LIMIT = 200000;
 const MAX_PAGE = 200;
 
 export const requestLogDir = (project) => join(logDir(project), "ai-requests");
@@ -96,21 +91,18 @@ function parseStatuses(value) {
 
 // Newest first, from file timestamps. Only the files a page needs are parsed, plus one more
 // match to decide whether another page exists, so an unfiltered first page reads ~limit files.
+// A filtered or searched page has to read until it fills, however deep that is: a short page
+// would otherwise claim the directory holds less than it does.
 export function listRequestLogs(project, {
-  status = "", query = "", offset = 0, limit = 50, maxScan = DEFAULT_MAX_SCAN, since = "",
+  status = "", query = "", offset = 0, limit = 50, since = "",
 } = {}) {
   const statuses = parseStatuses(status);
   const needle = String(query || "").trim().toLowerCase();
   const page = Math.max(0, Number(offset) || 0);
   const size = Math.min(MAX_PAGE, Math.max(1, Number(limit) || 50));
-  const requested = Number(maxScan);
-  // Any negative value means no limit; a value that is not a number falls back to the default.
-  const cap = Number.isFinite(requested)
-    ? (requested > 0 ? Math.min(Math.floor(requested), MAX_SCAN_LIMIT) : 0)
-    : 0;
   const result = {
     rows: [], offset: page, limit: size, hasMore: false,
-    scanned: 0, totalFiles: 0, truncated: false, damaged: 0, unchanged: false,
+    scanned: 0, totalFiles: 0, damaged: 0, unchanged: false,
   };
   // A follower sends the token it saw last time; an unchanged directory needs no scan at all.
   if (since && since === requestLogVersion(project)) {
@@ -135,10 +127,6 @@ export function listRequestLogs(project, {
   result.totalFiles = files.length;
   let matched = 0;
   for (const file of files) {
-    if (cap && result.scanned >= cap) {
-      result.truncated = true;
-      break;
-    }
     result.scanned++;
     let record;
     try {

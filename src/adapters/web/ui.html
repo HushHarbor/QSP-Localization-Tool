@@ -664,8 +664,7 @@
       </div>
       <div class="row" style="margin-top:.6rem">
         <span class="muted" id="log-hint" data-i18n="project.none">未选择项目</span>
-        <input id="log-max-scan" type="number" min="-1" step="1" value="-1" style="flex:0 0 8rem"
-          data-i18n-aria="logs.maxScanTitle" data-i18n-ph="logs.maxScanTitle" placeholder="-1">
+        <span></span>
         <button id="log-refresh" class="ghost" style="flex:0 0 auto" data-i18n="action.refresh">刷新</button>
       </div>
       <div class="log-entry" id="log-list" style="margin-top:.6rem"></div>
@@ -702,7 +701,7 @@ const state = {
   shutdown: false, entriesVersion: "", entriesScope: "",
   logs: {
     status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
-    detail: new Map(), signature: "", maxScan: -1, version: "", scope: "",
+    detail: new Map(), signature: "", version: "", scope: "",
   },
 };
 
@@ -819,10 +818,8 @@ const MESSAGES = {
     "log.empty": "No matching request records",
     "log.attempt": "attempt {n}",
     "log.scanned": "read {scanned} of {total} log files",
-    "log.truncated": "stopped at the scan limit; older records were not read",
     "log.damaged": "{count} unreadable",
     "log.page": "Page {n}",
-    "logs.maxScanTitle": "Log files one page may scan (-1 = all)",
     "job.title": "Job",
     "job.titleOf": "Job · {type}",
     "job.pause": "Pause",
@@ -945,10 +942,8 @@ const MESSAGES = {
     "log.empty": "没有匹配的请求记录",
     "log.attempt": "第 {n} 次",
     "log.scanned": "已读取 {scanned} / {total} 个日志文件",
-    "log.truncated": "已达扫描上限，较早的记录未读取",
     "log.damaged": "{count} 条无法解析",
     "log.page": "第 {n} 页",
-    "logs.maxScanTitle": "每页最多扫描的文件数（-1 为全部）",
     "job.title": "任务",
     "job.titleOf": "任务 · {type}",
     "job.pause": "暂停",
@@ -1514,7 +1509,7 @@ let logReadSeq = 0;
 // Everything a page shows except the row count, so an unchanged page can be left alone.
 function logsSignature(data) {
   const rows = data.rows.map((row) => `${row.requestId}:${row.status}:${row.durationMs}`).join(",");
-  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.totalFiles}|${data.damaged}|${data.truncated}|${rows}`;
+  return `${data.offset}|${data.hasMore}|${data.scanned}|${data.totalFiles}|${data.damaged}|${rows}`;
 }
 
 function logDetail(requestId) {
@@ -1598,14 +1593,13 @@ async function loadLogs({ force = false } = {}) {
   const seq = ++logReadSeq;
   // The remembered version only describes the current filter and page. Changing either one asks
   // a different question, so the cached answer must not be reused.
-  const scope = [state.logs.status, state.logs.query, state.logs.offset, state.logs.limit, state.logs.maxScan].join("|");
+  const scope = [state.logs.status, state.logs.query, state.logs.offset, state.logs.limit].join("|");
   if (scope !== state.logs.scope) {
     state.logs.scope = scope;
     state.logs.version = "";
   }
   const params = new URLSearchParams({
     name: state.project, offset: state.logs.offset, limit: state.logs.limit,
-    maxScan: state.logs.maxScan,
   });
   if (state.logs.status) params.set("status", state.logs.status);
   if (state.logs.query) params.set("q", state.logs.query);
@@ -1620,7 +1614,6 @@ async function loadLogs({ force = false } = {}) {
   state.logs.rows = data.rows;
   state.logs.hasMore = data.hasMore;
   const notes = [t("log.scanned", { scanned: data.scanned, total: data.totalFiles })];
-  if (data.truncated) notes.push(t("log.truncated"));
   if (data.damaged) notes.push(t("log.damaged", { count: data.damaged }));
   $("log-hint").textContent = notes.join(" · ");
   $("log-page").textContent = t("log.page", { n: Math.floor(data.offset / data.limit) + 1 });
@@ -1888,15 +1881,7 @@ function runLogSearch() {
 }
 $("log-search-run").addEventListener("click", runLogSearch);
 $("log-search").addEventListener("keydown", (event) => { if (event.key === "Enter") runLogSearch(); });
-// The limit only applies to the next read, so a half-typed number never triggers its own query.
-$("log-max-scan").addEventListener("change", () => {
-  const value = Number($("log-max-scan").value);
-  state.logs.maxScan = Number.isInteger(value) && value >= -1 ? value : -1;
-  $("log-max-scan").value = state.logs.maxScan;
-  state.logs.offset = 0;
-  state.logs.open = "";
-  loadLogs({ force: true }).catch((error) => notify(error.message, "error"));
-});$("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
+$("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
 $("log-prev").addEventListener("click", () => {
   state.logs.offset = Math.max(0, state.logs.offset - state.logs.limit);
   state.logs.open = "";
