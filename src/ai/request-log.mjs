@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { logDir, readJson, writeJson } from "../project/store.mjs";
+import { countLogStatuses, indexLogFiles } from "./log-index.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
@@ -89,10 +90,11 @@ function parseStatuses(value) {
   return values.length ? new Set(values) : null;
 }
 
-// Newest first, from file timestamps. Only the files a page needs are parsed, plus one more
-// match to decide whether another page exists, so an unfiltered first page reads ~limit files.
-// A filtered or searched page has to read until it fills, however deep that is: a short page
-// would otherwise claim the directory holds less than it does.
+// Newest first, from file timestamps. Statuses come from the index, so the counts describe every
+// file in the directory and a page only parses the records it is about to show. A filtered or
+// searched page still has to walk further down, however deep a match sits, because a short page
+// would otherwise claim the directory holds less than it does. Search reads text, which the index
+// does not keep, so it parses each candidate.
 export function listRequestLogs(project, {
   status = "", query = "", offset = 0, limit = 50, since = "",
 } = {}) {
@@ -120,39 +122,50 @@ export function listRequestLogs(project, {
     .filter((entry) => entry.isFile() && FILE_NAME.test(entry.name))
     .map((entry) => {
       const path = join(dir, entry.name);
-      return { name: entry.name, path, mtimeMs: statSync(path).mtimeMs };
+      const stats = statSync(path);
+      return { name: entry.name, path, mtimeMs: stats.mtimeMs, size: stats.size };
     })
     .sort((left, right) => right.mtimeMs - left.mtimeMs || left.name.localeCompare(right.name));
 
+  // The index is keyed by project name, which is what this module's callers pass in.
+  const index = indexLogFiles(project, files);
   result.totalFiles = files.length;
+  result.damaged = index.damaged;
+  result.counts = countLogStatuses(index.entries);
+
+  // A file read for its status is not read a second time for its row.
+  const recordOf = (file) => {
+    index.read.add(file.name);
+    try {
+      return JSON.parse(readFileSync(file.path, "utf8"));
+    } catch {
+      return null;
+    }
+  };
+
   let matched = 0;
   for (const file of files) {
-    result.scanned++;
-    let record;
-    try {
-      record = JSON.parse(readFileSync(file.path, "utf8"));
-    } catch {
-      result.damaged++;
-      continue;
+    const known = index.entries.get(file.name);
+    if (!known || known.status === null) continue;
+    if (statuses && !statuses.has(known.status)) continue;
+    let record = null;
+    let parsed = false;
+    if (needle) {
+      record = recordOf(file);
+      parsed = true;
+      if (!record || !searchable(record).includes(needle)) continue;
     }
-    if (!record || typeof record.requestId !== "string") {
-      result.damaged++;
-      continue;
-    }
-    // Counted before the filters: the summary describes the records this pass read, not the page
-    // it produced, and it costs nothing because the file is already parsed.
-    const recordStatus = typeof record.status === "string" ? record.status : "unknown";
-    result.counts[recordStatus] = (result.counts[recordStatus] || 0) + 1;
-    if (statuses && !statuses.has(record.status)) continue;
-    if (needle && !searchable(record).includes(needle)) continue;
     matched++;
     if (matched <= page) continue;
     if (result.rows.length >= size) {
       result.hasMore = true;
       break;
     }
-    result.rows.push({ ...summaryOf(record), sizeBytes: statSync(file.path).size });
+    if (!parsed) record = recordOf(file);
+    if (!record) continue;
+    result.rows.push({ ...summaryOf(record), sizeBytes: file.size });
   }
+  result.scanned = index.read.size;
   result.version = requestLogVersion(project);
   return result;
 }
