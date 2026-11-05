@@ -1,0 +1,15 @@
+# Imported project data, translations, and generated outputs.
+/project/*
+
+# Dependencies and operating-system files.
+node_modules/
+/logs/
+.DS_Store
+Thumbs.db
+
+# Temporary files used for atomic writes.
+*.tmp-*
+
+# Prototypes and one-off probes. Project data and real game sources never belong in the tree.
+/dev/*
+

@@ -1,0 +1,22 @@
+{
+  "name": "qsp-translate",
+  "version": "2.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first CLI and web toolkit for translating, reviewing, and rebuilding game text",
+  "scripts": {
+    "import": "node src/adapters/cli.mjs import",
+    "translate": "node src/adapters/cli.mjs translate",
+    "status": "node src/adapters/cli.mjs status",
+    "find": "node src/adapters/cli.mjs find",
+    "edit": "node src/adapters/cli.mjs edit",
+    "build": "node src/adapters/cli.mjs build",
+    "check": "node src/adapters/cli.mjs check",
+    "ui": "node src/adapters/cli.mjs ui",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

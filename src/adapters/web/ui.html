@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>翻译工作台</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fdf7f9;
+    --bg-cool: #f4fbfb;
+    --surface: #ffffff;
+    --surface-muted: #fff8fb;
+    --surface-sunken: #fbf1f6;
+    --border: #f4dee7;
+    --border-strong: #ddbfcd;
+    --text: #2b1a24;
+    --text-muted: #6d5866;
+    --text-faint: #9d8895;
+    --rose: #e0507a;
+    --primary: #d9416e;
+    --primary-strong: #b52a54;
+    --primary-soft: #ffe9f0;
+    --aqua: #1f9d92;
+    --aqua-bright: #37c4b6;
+    --aqua-soft: #e0f7f4;
+    --wine: #8f1d38;
+    --lemon: #f0c057;
+    --danger: #a5213c;
+    --danger-soft: #fdeef1;
+    --warn: #a86300;
+    --warn-soft: #fdf3e2;
+    --ok: #157d68;
+    --ok-soft: #e2f7f1;
+    --radius-lg: 18px;
+    --radius: 12px;
+    --radius-sm: 9px;
+    --shadow-card: 0 1px 2px #2b1a240a, 0 18px 38px -32px #2b1a2459;
+    --shadow-lift: 0 18px 34px -26px #c02f5c4d;
+    --focus: 0 0 0 3px #e0507a3d;
+    --mono: 12.5px/1.6 "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text);
+    font: 14px/1.55 "Segoe UI", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    background:
+      radial-gradient(760px 420px at 6% -8%, #ffe3ec 0%, transparent 66%),
+      radial-gradient(680px 380px at 98% 2%, #dcf7f3 0%, transparent 62%),
+      linear-gradient(180deg, #fffafc 0%, var(--bg) 46%, var(--bg-cool) 100%);
+    background-attachment: fixed;
+  }
+  /* Reading progress line pinned to the top of the viewport. */
+  body::after {
+    content: "";
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 20;
+    width: var(--scroll, 0%);
+    height: 3px;
+    background: linear-gradient(90deg, var(--rose), var(--lemon) 50%, var(--aqua-bright));
+    transition: width .12s linear;
+    pointer-events: none;
+  }
+
+  /* Header */
+  .app-header {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1.1rem clamp(1rem, 3vw, 2.2rem);
+    color: #fff;
+    background:
+      radial-gradient(440px 260px at 5% 0%, #e0507a52 0%, transparent 70%),
+      radial-gradient(400px 250px at 93% 8%, #37c4b640 0%, transparent 72%),
+      linear-gradient(115deg, #1d1420 0%, #2a1a2a 54%, #33202f 100%);
+    box-shadow: 0 20px 44px -32px #2b1a24a6;
+  }
+  .app-header::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--rose), var(--lemon) 36%, var(--aqua-bright));
+  }
+  .brand { display: flex; align-items: center; gap: .85rem; }
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: .8rem;
+    background: linear-gradient(140deg, #ffb0ca 0%, var(--rose) 46%, var(--aqua-bright) 100%);
+    font-weight: 800;
+    font-size: 1rem;
+    box-shadow: inset 0 1px 0 #ffffff8a, 0 10px 22px -14px var(--rose);
+  }
+  .app-header h1 { margin: 0; font-size: 1.16rem; letter-spacing: .01em; }
+  .app-header p { margin: .15rem 0 0; color: #cbb9c6; font-size: .82rem; }
+  .header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .header-actions select {
+    width: 200px;
+    background: #ffffff1f;
+    border-color: #ffffff33;
+    color: #fff;
+  }
+  .header-actions select option { color: var(--text); }
+  .app-header button { background: #ffffff1f; border-color: #ffffff33; color: #fff; }
+  .app-header button:hover:not(:disabled) { background: #ffffff2e; border-color: #ffffff4d; }
+  #state-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .2rem .62rem;
+    border-radius: 999px;
+    background: #ffffff1f;
+    color: #e4d4de;
+    font-size: .78rem;
+    white-space: nowrap;
+  }
+  #state-hint::before {
+    content: "";
+    width: .42rem;
+    height: .42rem;
+    border-radius: 50%;
+    background: var(--aqua-bright);
+    box-shadow: 0 0 0 3px #37c4b62e;
+  }
+
+  /* Message toast */
+  #message {
+    width: min(1360px, calc(100% - 2rem));
+    margin: 1rem auto 0;
+    font-size: .9rem;
+    font-weight: 600;
+    color: var(--primary-strong);
+  }
+  #message:empty { display: none; }
+  #message:not(:empty) {
+    padding: .6rem 1rem;
+    border: 1px solid #ffd3e1;
+    border-left: 3px solid var(--rose);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, #fff3f8, #fff9fb);
+    animation: slideDown .28s cubic-bezier(.22, .8, .36, 1) both;
+  }
+  #message.error:not(:empty) {
+    border-color: #f7c9d2;
+    border-left-color: var(--wine);
+    background: linear-gradient(90deg, var(--danger-soft), #fff8f9);
+    color: var(--danger);
+  }
+  #message.ok:not(:empty) {
+    border-color: #bfe8dd;
+    border-left-color: var(--ok);
+    background: linear-gradient(90deg, var(--ok-soft), #f7fdfb);
+    color: var(--ok);
+  }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* Layout */
+  .layout {
+    display: grid;
+    grid-template-columns: 348px minmax(0, 1fr);
+    gap: 1.15rem;
+    align-items: start;
+    width: min(1360px, calc(100% - 2rem));
+    margin: 1rem auto 4rem;
+  }
+  .column { display: flex; flex-direction: column; gap: 1.15rem; min-width: 0; }
+  .card {
+    position: relative;
+    padding: 1.1rem 1.2rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(180deg, #fffdfe, var(--surface) 42%);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow .3s ease;
+    min-width: 0;
+  }
+  .card:hover { box-shadow: var(--shadow-lift); }
+  .card > h2 {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    margin: 0 0 .8rem;
+    font-size: .98rem;
+    font-weight: 700;
+  }
+  .card > h2::before {
+    content: "";
+    width: .28rem;
+    height: 1.05rem;
+    border-radius: 99px;
+    background: linear-gradient(180deg, var(--rose), var(--aqua-bright));
+  }
+  .card > h2 .counter { color: var(--text-faint); font-size: .8rem; font-weight: 600; }
+
+  /* Forms */
+  label { display: block; margin: .55rem 0 .3rem; color: var(--text-muted); font-size: .82rem; font-weight: 600; }
+  input, select, textarea { font: inherit; color: var(--text); }
+  input, select, textarea {
+    width: 100%;
+    padding: .45rem .6rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  input:hover:not(:disabled), select:hover, textarea:hover { border-color: #d3a9ba; }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--rose);
+    background: #fffdfe;
+    box-shadow: var(--focus);
+  }
+  input[type="checkbox"] { width: auto; accent-color: var(--primary); }
+  textarea { resize: vertical; min-height: 60px; }
+  .row { display: flex; gap: .55rem; }
+  .row > * { flex: 1; min-width: 0; }
+  .stack > * + * { margin-top: .6rem; }
+  .muted { color: var(--text-muted); font-size: .82rem; }
+  .hint { color: var(--text-faint); font-size: .8rem; margin-top: .45rem; }
+  .inline { display: flex; align-items: center; gap: .45rem; margin-top: .6rem; font-size: .82rem; font-weight: 600; color: var(--text-muted); }
+
+  /* Buttons */
+  button {
+    appearance: none;
+    padding: .45rem .85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: .85rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background .2s ease, border-color .2s ease, box-shadow .24s ease, transform .18s cubic-bezier(.2, .9, .3, 1.4);
+  }
+  button:hover:not(:disabled) {
+    background: #fff7fa;
+    border-color: #f3bccf;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -18px #2b1a2480;
+  }
+  button:active:not(:disabled) { transform: translateY(0) scale(.985); }
+  button:focus-visible { outline: none; box-shadow: var(--focus); }
+  button.primary {
+    background: linear-gradient(160deg, #ea5a83, var(--primary) 55%, #c62f5c);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 10px 22px -16px var(--primary);
+  }
+  button.primary:hover:not(:disabled) {
+    background: linear-gradient(160deg, #f0688e, var(--primary-strong) 60%, #a8234c);
+    border-color: transparent;
+  }
+  button.build {
+    background: linear-gradient(160deg, #c9304f, var(--wine) 58%, #6f1229);
+    border-color: transparent;
+    color: #fff;
+  }
+  button.build:hover:not(:disabled) { background: linear-gradient(160deg, #dd3a5c, #a12340 60%, #82162f); border-color: transparent; }
+  button.ghost { background: transparent; border-color: var(--border-strong); color: var(--text-muted); }
+  button.ghost:hover:not(:disabled) { background: var(--surface-muted); color: var(--text); }
+  button.danger { background: var(--danger-soft); border-color: #f6c9d3; color: var(--danger); }
+  button.danger:hover:not(:disabled) { background: #fadfe6; }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .chip {
+    padding: .24rem .68rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    font-size: .76rem;
+    font-weight: 650;
+    box-shadow: none;
+  }
+  .chip:hover:not(:disabled) { background: var(--surface-sunken); color: var(--text); box-shadow: none; transform: translateY(-1px); }
+  .chip.active {
+    background: linear-gradient(140deg, #ffe3ec, #fff0f5);
+    border-color: #f7bcd1;
+    color: var(--primary-strong);
+    box-shadow: 0 6px 14px -12px var(--primary);
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .08rem .5rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .01em;
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .badge::before { content: ""; width: .38rem; height: .38rem; border-radius: 50%; background: currentColor; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.manual { background: var(--primary-soft); color: var(--primary-strong); }
+  .badge.invalid { background: var(--warn-soft); color: var(--warn); }
+  .badge.server_error { background: var(--danger-soft); color: var(--danger); }
+  .badge.completed { background: var(--ok-soft); color: var(--ok); }
+  .badge.failed { background: var(--danger-soft); color: var(--danger); }
+  .badge.started { background: var(--primary-soft); color: var(--primary-strong); }
+  .badge.running::before { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  /* Project summary */
+  .stat-row { display: flex; flex-wrap: wrap; gap: .35rem .9rem; margin-top: .7rem; }
+  .stat { display: flex; align-items: baseline; gap: .32rem; font-size: .78rem; color: var(--text-muted); }
+  .stat b { font-size: .92rem; color: var(--text); font-variant-numeric: tabular-nums; }
+  .bar {
+    height: .5rem;
+    margin: .65rem 0 .1rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #f7edf2;
+    box-shadow: inset 0 1px 2px #2b1a2412;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ffb3c8, var(--rose) 42%, var(--aqua-bright) 130%);
+    background-size: 220% 100%;
+    animation: sheen 3.2s linear infinite;
+    transition: width .35s ease;
+  }
+  @keyframes sheen { from { background-position: 0% 0; } to { background-position: 220% 0; } }
+
+  /* Tabs */
+  .tabs { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .85rem; }
+
+  /* Inline question shown while a project selection waits for an answer. */
+  .notice {
+    margin-bottom: .85rem;
+    padding: .7rem .85rem;
+    font-size: .85rem;
+    color: var(--aqua);
+    border: 1px solid #bfe8e2;
+    border-left: 3px solid var(--aqua);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, var(--aqua-soft), #f7fdfc);
+    animation: slideDown .24s cubic-bezier(.22, .8, .36, 1) both;
+  }
+  .notice .row > * { flex: 0 0 auto; }
+  /* Entries */
+  .entries { display: flex; flex-direction: column; gap: .55rem; }
+  .entry {
+    padding: .7rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-muted);
+    transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  }
+  .entry .head { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+  .entry .head .id { color: var(--text-faint); font: 11px/1.4 ui-monospace, Consolas, monospace; }
+  .entry .src { margin: .45rem 0; white-space: pre-wrap; word-break: break-word; }
+  .entry textarea { min-height: 54px; background: var(--surface); }
+  .entry .err { color: var(--danger); font-size: .78rem; margin-top: .3rem; }
+  .entry.changed {
+    border-color: var(--rose);
+    background: linear-gradient(180deg, #fff6fa, var(--surface-muted));
+    box-shadow: 0 0 0 3px #e0507a1a;
+  }
+  .entry .flag { display: none; color: var(--primary-strong); font-size: .72rem; font-weight: 700; }
+  .entry.changed .flag { display: inline; }
+  .entry .reopen { padding: .1rem .5rem; font-size: .72rem; border-radius: .4rem; margin-left: auto; }
+
+  /* Pager */
+  .pager { display: flex; align-items: center; gap: .6rem; margin-top: .8rem; }
+
+  /* Request log */
+  .log-entry { display: flex; flex-direction: column; gap: .45rem; }
+  .log-row {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .6rem;
+    padding: .45rem .6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+    font-size: .82rem;
+    cursor: pointer;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .log-row:hover { border-color: #f3bccf; background: #fffafc; transform: translateY(-1px); }
+  .log-row.open { border-color: var(--rose); background: #fff6fa; }
+  .log-time { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .log-meta { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-meta b { color: var(--text); font-weight: 650; }
+  .log-chev { color: var(--text-faint); font-size: .7rem; transition: transform .2s ease; }
+  .log-row.open .log-chev { transform: rotate(90deg); color: var(--rose); }
+  .log-detail {
+    margin: -.2rem 0 .2rem;
+    padding: .7rem .8rem;
+    border-radius: var(--radius);
+    background:
+      radial-gradient(420px 200px at 12% 0%, #e0507a1f 0%, transparent 70%),
+      radial-gradient(360px 180px at 88% 100%, #37c4b614 0%, transparent 72%),
+      #191016;
+    color: #ecdde5;
+    box-shadow: inset 0 1px 0 #ffffff0f;
+  }
+  .log-detail pre {
+    margin: 0;
+    max-height: 26rem;
+    overflow: auto;
+    font: var(--mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .log-detail .log-actions { display: flex; justify-content: flex-end; gap: .4rem; margin-bottom: .45rem; }
+  .log-detail button {
+    background: #ffffff14;
+    border-color: #ffffff26;
+    color: #f2e6ec;
+    font-size: .75rem;
+    padding: .2rem .6rem;
+  }
+  .log-detail button:hover:not(:disabled) { background: #ffffff24; border-color: #ffffff3d; }
+
+  /* Task panel */
+  .job {
+    position: fixed;
+    inset: auto 16px 16px auto;
+    z-index: 15;
+    display: none;
+    width: 440px;
+    max-height: 52vh;
+    padding: .95rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(180deg, #fffdfe, var(--surface) 40%);
+    box-shadow: 0 24px 50px -28px #2b1a2466;
+  }
+  .job.visible { display: block; animation: slideDown .3s cubic-bezier(.22, .8, .36, 1) both; }
+  .job h3 { display: flex; align-items: center; gap: .55rem; margin: 0 0 .3rem; font-size: .92rem; }
+  .job .phase { color: var(--text-muted); font-size: .8rem; }
+  .job .actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
+  .job .logs {
+    max-height: 22vh;
+    margin-top: .6rem;
+    padding: .5rem .6rem;
+    overflow: auto;
+    border-radius: var(--radius);
+    background:
+      radial-gradient(420px 200px at 12% 0%, #e0507a1f 0%, transparent 70%),
+      radial-gradient(360px 180px at 88% 100%, #37c4b614 0%, transparent 72%),
+      #191016;
+    color: #ecdde5;
+    font: 11.5px/1.6 "Cascadia Code", Consolas, monospace;
+    box-shadow: inset 0 1px 0 #ffffff0f;
+  }
+  .log-line { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; padding: .05rem 0; }
+  .log-line .level {
+    padding: .02rem .38rem;
+    border-radius: 999px;
+    background: #ffffff14;
+    color: #c6b0bc;
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    height: fit-content;
+  }
+  .log-line.warn .level { background: #f0c05726; color: #f6d183; }
+  .log-line.warn .text { color: #f3dcae; }
+  .log-line.error .level { background: #e0507a33; color: #ffa3b8; }
+  .log-line.error .text { color: #ffc0cd; }
+  .log-line .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .job { width: calc(100% - 32px); }
+  }
+  @media (max-width: 640px) {
+    .app-header { align-items: flex-start; }
+    .row { flex-direction: column; }
+    .header-actions select { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">译</span>
+    <div>
+      <h1>翻译工作台</h1>
+      <p>导入 · 翻译 · 人工校验 · 导出</p>
+    </div>
+  </div>
+  <div class="header-actions">
+    <select id="project-select" aria-label="项目"><option value="">选择项目</option></select>
+    <button id="refresh" class="ghost">刷新</button>
+    <span id="state-hint">就绪</span>
+  </div>
+</header>
+
+<div id="message" role="status" aria-live="polite"></div>
+
+<main class="layout">
+  <div class="column">
+    <section class="card">
+      <h2>连接设置</h2>
+      <div class="stack">
+        <div><label for="api-base">服务地址</label><input id="api-base" placeholder="http://127.0.0.1:1234 或端口"></div>
+        <div><label for="api-model">模型</label><input id="api-model"></div>
+        <div><label for="api-key">API Key（留空保持不变）</label><input id="api-key" type="password" autocomplete="off"></div>
+        <div class="row">
+          <div><label for="api-conc">并发</label><input id="api-conc" type="number" min="1"></div>
+          <div><label for="api-attempts">重试</label><input id="api-attempts" type="number" min="1"></div>
+        </div>
+        <div class="row">
+          <button id="api-save" class="primary">保存</button>
+          <button id="api-test" class="ghost">测试连接</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>项目初始化</h2>
+      <div class="stack">
+        <div><label for="import-file">源文件</label><input id="import-file" type="file"></div>
+        <div><label for="import-name">项目名</label><input id="import-name" placeholder="字母、数字、下划线、连字符"></div>
+        <div><label for="import-importer">导入器</label><select id="import-importer"></select></div>
+        <label class="inline"><input id="import-rebuild" type="checkbox"> 重新导入并保留能匹配的译文</label>
+        <button class="primary" id="import-run">导入</button>
+        <div class="hint" id="import-hint"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>项目状态</h2>
+      <div id="project-info" class="muted">尚未选择项目</div>
+      <div id="project-summary"></div>
+      <div class="stack" style="margin-top:.9rem">
+        <div class="row">
+          <div><label for="tr-from">起始批次</label><input id="tr-from" type="number" min="1" placeholder="1"></div>
+          <div><label for="tr-to">结束批次</label><input id="tr-to" type="number" min="1" placeholder="末尾"></div>
+        </div>
+        <div class="row">
+          <div><label for="tr-limit">本次上限</label><input id="tr-limit" type="number" min="1" placeholder="不限"></div>
+          <div><label for="tr-conc">并发</label><input id="tr-conc" type="number" min="1" placeholder="6"></div>
+        </div>
+        <button class="primary" id="translate-run">开始翻译</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>导出</h2>
+      <div class="stack">
+        <div><label for="build-dir">目录（必填）</label><input id="build-dir" placeholder="导出到哪个目录"></div>
+        <div><label for="build-name">文件名</label><input id="build-name"></div>
+        <label class="inline"><input id="build-raw" type="checkbox"> 导出未翻译的原始文件</label>
+        <button class="build" id="build-run">导出</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>项目设置</h2>
+      <div class="hint" id="editor-scope" style="margin:-.4rem 0 .7rem"></div>
+      <div class="notice hidden" id="editor-switch">
+        <div id="editor-switch-text"></div>
+        <div class="row" style="margin-top:.55rem">
+          <button class="primary" id="editor-switch-load">载入</button>
+          <button class="ghost" id="editor-switch-keep">保留</button>
+          <button class="ghost" id="editor-switch-cancel">取消</button>
+        </div>
+      </div>
+      <div class="tabs" id="editor-tabs">
+        <button class="chip active" data-tab="prompts">提示词</button>
+        <button class="chip" data-tab="glossary">术语表</button>
+      </div>
+      <div id="tab-prompts">
+        <textarea id="prompts-text" spellcheck="false" style="min-height:260px"></textarea>
+        <button id="prompts-save" class="ghost" style="margin-top:.55rem">保存提示词</button>
+      </div>
+      <div id="tab-glossary" class="hidden">
+        <textarea id="glossary-text" spellcheck="false" style="min-height:260px"></textarea>
+        <button id="glossary-save" class="ghost" style="margin-top:.55rem">保存术语表</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="tabs" id="review-tabs">
+      <button class="chip active" data-panel="review">人工校验</button>
+      <button class="chip" data-panel="logs">请求日志</button>
+    </div>
+
+    <div id="panel-review">
+      <div class="chips" id="filters">
+        <button class="chip active" data-statuses="">全部</button>
+        <button class="chip" data-statuses="manual,invalid,server_error">非 ok</button>
+        <button class="chip" data-statuses="manual">manual</button>
+        <button class="chip" data-statuses="invalid">invalid</button>
+        <button class="chip" data-statuses="server_error">server_error</button>
+        <button class="chip" data-statuses="ok">ok</button>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <input id="search" placeholder="关键词或正则">
+        <button id="search-run" class="ghost" style="flex:0 0 auto">搜索</button>
+        <label class="inline" style="margin:0;flex:0 0 auto"><input id="search-regex" type="checkbox"> 正则</label>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <span class="muted" id="entries-hint">未选择项目</span>
+        <span></span>
+        <button id="apply-changed" class="primary" style="flex:0 0 auto">应用修改</button>
+      </div>
+      <div class="entries" id="entries" style="margin-top:.6rem"></div>
+      <div class="pager">
+        <button id="prev" class="ghost">上一页</button>
+        <span class="muted" id="page-hint"></span>
+        <button id="next" class="ghost">下一页</button>
+      </div>
+    </div>
+
+    <div id="panel-logs" class="hidden">
+      <div class="chips" id="log-filters">
+        <button class="chip active" data-log-status="">全部</button>
+        <button class="chip" data-log-status="completed">完成</button>
+        <button class="chip" data-log-status="failed">失败</button>
+        <button class="chip" data-log-status="started">未完成</button>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <input id="log-search" placeholder="条目 ID、模型、原文或错误信息">
+        <button id="log-search-run" class="ghost" style="flex:0 0 auto">搜索</button>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <span class="muted" id="log-hint">未选择项目</span>
+        <span></span>
+        <button id="log-refresh" class="ghost" style="flex:0 0 auto">刷新</button>
+      </div>
+      <div class="log-entry" id="log-list" style="margin-top:.6rem"></div>
+      <div class="pager">
+        <button id="log-prev" class="ghost">上一页</button>
+        <span class="muted" id="log-page"></span>
+        <button id="log-next" class="ghost">下一页</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside class="job" id="job">
+  <h3>
+    <span id="job-title">任务</span>
+    <span id="job-state" class="badge"></span>
+  </h3>
+  <div class="phase" id="job-phase"></div>
+  <div class="bar"><i id="job-bar"></i></div>
+  <div class="actions">
+    <button id="job-pause" class="ghost">暂停</button>
+    <button id="job-resume" class="ghost">继续</button>
+    <button id="job-stop" class="danger">停止</button>
+    <button id="job-close" class="ghost">关闭</button>
+  </div>
+  <div class="logs" id="job-logs"></div>
+</aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  project: "", statuses: "", query: "", regex: false, offset: 0, limit: 50,
+  entries: [], dirty: new Map(), jobId: null, poll: null, jobDismissed: null,
+  logs: { status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "", detail: new Map() },
+};
+
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[ch]));
+
+async function request(path, options = {}) {
+  const response = await fetch(path, { cache: "no-store", ...options });
+  const text = await response.text();
+  let body;
+  try { body = text ? JSON.parse(text) : {}; } catch { body = { error: text }; }
+  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+  return body;
+}
+
+function setHint(text) { $("state-hint").textContent = text; }
+
+// Transient feedback under the header. Errors stay longer than confirmations.
+let messageTimer = null;
+function notify(text, kind = "info") {
+  const box = $("message");
+  box.textContent = text;
+  box.className = kind === "error" ? "error" : kind === "ok" ? "ok" : "";
+  clearTimeout(messageTimer);
+  messageTimer = setTimeout(() => {
+    box.textContent = "";
+    box.className = "";
+  }, kind === "error" ? 9000 : 4200);
+}
+
+function setBusy(busy) {
+  for (const id of ["import-run", "translate-run", "build-run", "refresh"]) $(id).disabled = busy;
+}
+
+function clockOf(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function updateScrollProgress() {
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  document.body.style.setProperty("--scroll", max > 0 ? `${Math.min(100, window.scrollY / max * 100)}%` : "0%");
+}
+
+async function loadState(select = state.project) {
+  const data = await request("/api/state");
+  const selectEl = $("project-select");
+  selectEl.innerHTML = '<option value="">选择项目</option>' +
+    data.projects.map((name) => `<option ${name === select ? "selected" : ""}>${esc(name)}</option>`).join("");
+  $("import-importer").innerHTML = data.importers
+    .map((importer) => `<option value="${esc(importer.id)}" ${importer.default ? "selected" : ""}>${esc(importer.label)}</option>`)
+    .join("");
+  const api = data.api || {};
+  $("api-base").value = api.baseUrl || "";
+  $("api-model").value = api.model || "";
+  $("api-conc").value = api.concurrency || 6;
+  $("api-attempts").value = api.attempts || 2;
+  if (data.incompatible?.length) {
+    notify(`${data.incompatible.length} 个旧项目需要重新导入`, "error");
+  }
+  if (select) await selectProject(select);
+}
+
+async function selectProject(name, { loadEditor = true } = {}) {
+  const target = name || "";
+  // Fetch first: a project that disappeared must leave the panel on the previous project
+  // instead of pointing the whole page at a name that answers 404 forever.
+  let info = null;
+  if (target) {
+    try {
+      info = await request(`/api/project?name=${encodeURIComponent(target)}`);
+    } catch (error) {
+      $("project-select").value = state.project;
+      notify(error.message, "error");
+      return;
+    }
+  }
+  const changed = target !== state.project;
+  state.project = target;
+  state.offset = 0;
+  state.dirty.clear();
+  updateDirtyLabel();
+  updateEditorScope();
+  if (changed) {
+    state.logs = { ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map() };
+    $("log-list").replaceChildren();
+    $("log-page").textContent = "";
+  }
+  if (!target) {
+    $("project-info").textContent = "尚未选择项目";
+    $("project-summary").innerHTML = "";
+    $("entries").innerHTML = "";
+    $("entries-hint").textContent = "未选择项目";
+    $("log-hint").textContent = "未选择项目";
+    if (loadEditor) await loadEditorContent();
+    return;
+  }
+  $("project-info").innerHTML =
+    `<div>${esc(info.importer.label)} · ${esc(info.source.fileName)}</div>` +
+    `<div>${info.source.locations} 个位置 · ${info.stats.batches} 个批次 · ${info.stats.entries} 条条目 · 固定点 ${info.source.fixedPoint ? "是" : "否"}</div>` +
+    `<div>条目与译文保存在本项目的 pool/，提示词、术语表、导入规则保存在 rule/</div>`;
+  renderSummary(info.summary);
+  $("build-name").value = $("build-raw").checked ? info.rawOutputName : info.outputName;
+  if (loadEditor) await loadEditorContent();
+  await loadEntries();
+}
+
+// The editor follows the selected project: a project shows its own copy, and the empty
+// selection shows the global defaults a new project starts from.
+function updateEditorScope() {
+  $("editor-scope").textContent = state.project
+    ? `当前编辑「${state.project}」的提示词和术语表，保存只影响本项目。`
+    : "未选择项目，当前编辑全局默认值；新建项目从这里开始。";
+}
+
+async function loadEditorContent() {
+  const query = state.project ? `?name=${encodeURIComponent(state.project)}` : "";
+  try {
+    const [table, glossary] = await Promise.all([
+      request(`/api/prompts${query}`),
+      request(`/api/glossary${query}`),
+    ]);
+    $("prompts-text").value = JSON.stringify(table, null, 2);
+    $("glossary-text").value = JSON.stringify(glossary, null, 2);
+  } catch (error) {
+    notify(error.message, "error");
+  }
+}
+
+// A selection is held until the editor question is answered, so switching a project never
+// silently discards text that has not been saved yet.
+let pendingSwitch = null;
+
+function askEditorSwitch(name) {
+  const target = name || "";
+  // Choosing the current project again cancels the question instead of leaving it pointing at an
+  // answer the user just took back.
+  if (target === state.project) {
+    pendingSwitch = null;
+    $("editor-switch").classList.add("hidden");
+    return;
+  }
+  pendingSwitch = target;
+  $("editor-switch-text").textContent = target
+    ? `切换到「${target}」。是否把本项目的提示词和术语表载入编辑框？`
+    : "切换到全局默认值。是否把全局的提示词和术语表载入编辑框？";
+  $("editor-switch").classList.remove("hidden");
+}
+
+function resolveEditorSwitch(loadEditor) {
+  if (pendingSwitch === null) return Promise.resolve();
+  const target = pendingSwitch;
+  pendingSwitch = null;
+  $("editor-switch").classList.add("hidden");
+  return selectProject(target, { loadEditor }).catch((error) => notify(error.message, "error"));
+}
+
+$("editor-switch-load").addEventListener("click", () => resolveEditorSwitch(true));
+$("editor-switch-keep").addEventListener("click", () => resolveEditorSwitch(false));
+$("editor-switch-cancel").addEventListener("click", () => {
+  pendingSwitch = null;
+  $("editor-switch").classList.add("hidden");
+  $("project-select").value = state.project;
+});
+
+function renderSummary(summary) {
+  const container = $("project-summary");
+  if (!summary) { container.innerHTML = ""; return; }
+  const counts = summary.counts || {};
+  const stats = [
+    ["已译", `${summary.translated}/${summary.entries}`],
+    ["ok", counts.ok ?? 0],
+    ["manual", counts.manual ?? 0],
+    ["invalid", counts.invalid ?? 0],
+    ["server_error", counts.server_error ?? 0],
+  ];
+  const percent = Math.max(0, Math.min(100, Number(summary.percent) || 0));
+  container.innerHTML =
+    `<div class="stat-row">` +
+    stats.map(([label, value]) => `<span class="stat"><span>${esc(label)}</span><b>${esc(value)}</b></span>`).join("") +
+    `</div>` +
+    `<div class="bar"><i style="width:${percent}%"></i></div>`;
+}
+
+function updateDirtyLabel() {
+  const count = state.dirty.size;
+  $("apply-changed").textContent = count ? `应用修改 (${count})` : "应用修改";
+  $("apply-changed").disabled = !count;
+}
+
+async function loadEntries() {
+  if (!state.project) return;
+  const params = new URLSearchParams({ name: state.project, offset: state.offset, limit: state.limit });
+  if (state.statuses) params.set("status", state.statuses);
+  if (state.query) params.set("q", state.query);
+  if (state.regex) params.set("regex", "true");
+  const data = await request(`/api/entries?${params}`);
+  state.entries = data.rows;
+  state.dirty.clear();
+  updateDirtyLabel();
+  renderSummary(data.summary);
+  $("entries-hint").textContent = `${data.total} 条匹配，显示 ${data.rows.length} 条`;
+  $("page-hint").textContent = `${data.offset + 1}–${data.offset + data.rows.length} / ${data.total}`;
+  const container = $("entries");
+  container.innerHTML = data.rows.length ? "" : '<div class="hint">没有匹配的条目</div>';
+  for (const row of data.rows) {
+    const item = document.createElement("div");
+    item.className = "entry";
+    item.dataset.id = row.id;
+    item.innerHTML =
+      `<div class="head">` +
+      `<span class="id">${esc(row.id)}</span>` +
+      `<span class="badge ${esc(row.status)}">${esc(row.status)}</span>` +
+      `<span class="muted">${esc(row.batchName)}</span>` +
+      `<span class="flag">已修改</span>` +
+      (row.status === "manual"
+        ? `<button class="ghost reopen" data-id="${esc(row.id)}">取消 manual</button>`
+        : "") +
+      `</div>` +
+      `<div class="src">${esc(row.source)}</div>` +
+      `<textarea spellcheck="false">${esc(row.translation)}</textarea>` +
+      (row.error ? `<div class="err">${esc(row.error)}</div>` : "");
+    const textarea = item.querySelector("textarea");
+    textarea.dataset.original = row.translation;
+    textarea.addEventListener("input", () => {
+      if (textarea.value !== textarea.dataset.original) {
+        state.dirty.set(row.id, textarea.value);
+        item.classList.add("changed");
+      } else {
+        state.dirty.delete(row.id);
+        item.classList.remove("changed");
+      }
+      updateDirtyLabel();
+    });
+    item.querySelector(".reopen")?.addEventListener("click", () => reopenEntry(row.id));
+    container.appendChild(item);
+  }
+}
+
+// Clearing the manual mark hands the entry back to the AI pipeline as `server_error`, keeping the
+// text in the box for reference.
+async function reopenEntry(id) {
+  if (state.dirty.size) {
+    notify("先应用修改，再取消 manual", "error");
+    return;
+  }
+  const result = await request("/api/reopen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project: state.project, ids: [id] }),
+  });
+  notify(`已取消 ${result.updated} 条 manual 标记`, "ok");
+  await loadEntries();
+}
+
+async function applyEdits(changes) {
+  if (!state.project || !changes.length) return;
+  const result = await request("/api/edit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project: state.project, changes }),
+  });
+  notify(`已应用 ${result.updated} 条修改`, "ok");
+  await loadEntries();
+  const info = await request(`/api/project?name=${encodeURIComponent(state.project)}`);
+  renderSummary(info.summary);
+}
+
+// ---- Jobs ----
+const JOB_STATES = {
+  running: ["运行中", "running"],
+  paused: ["已暂停", "invalid"],
+  completed: ["已完成", "completed"],
+  failed: ["失败", "failed"],
+  stopped: ["已停止", ""],
+};
+
+function appendLogLine(view, text, label, kind = "") {
+  const row = document.createElement("div");
+  row.className = `log-line ${kind}`;
+  const level = document.createElement("span");
+  level.className = "level";
+  level.textContent = label;
+  const body = document.createElement("span");
+  body.className = "text";
+  body.textContent = text;
+  row.append(level, body);
+  view.append(row);
+}
+
+function renderJobLogs(logs, result, error) {
+  const view = $("job-logs");
+  view.replaceChildren();
+  for (const line of logs.slice(-120)) {
+    const kind = line.level === "warn" || line.level === "error" ? line.level : "";
+    appendLogLine(view, line.text, String(line.level || "log").toUpperCase(), kind);
+  }
+  if (result) appendLogLine(view, JSON.stringify(result, null, 2), "RESULT");
+  if (error) appendLogLine(view, error, "ERROR", "error");
+  view.scrollTop = view.scrollHeight;
+}
+
+function showJob(job) {
+  state.jobId = job.id;
+  // Reopening a panel the user closed would make the close button useless.
+  if (state.jobDismissed !== job.id) $("job").classList.add("visible");
+  $("job-title").textContent = `任务 · ${job.type}`;
+  const key = job.status === "running" && job.controlState === "paused" ? "paused" : job.status;
+  const [label, kind] = JOB_STATES[key] || [job.status, ""];
+  const badge = $("job-state");
+  badge.textContent = label;
+  badge.className = `badge ${kind}`;
+  $("job-phase").textContent = `${job.progress.phase} ${job.progress.completed}/${job.progress.total} (${job.progress.percent}%)`;
+  $("job-bar").style.width = `${job.progress.percent}%`;
+  renderJobLogs(job.logs, job.result, job.error);
+  const running = job.status === "running";
+  $("job-pause").disabled = !running || !job.controllable;
+  $("job-resume").disabled = !running || !job.controllable;
+  $("job-stop").disabled = !running || !job.controllable;
+}
+
+async function pollJob() {
+  try {
+    const { job } = await request("/api/job");
+    if (!job) return;
+    showJob(job);
+    if (job.status === "running") {
+      state.poll = setTimeout(pollJob, 600);
+      return;
+    }
+    state.poll = null;
+    setHint(JOB_STATES[job.status]?.[0] || job.status);
+    setBusy(false);
+    if (job.status === "completed") notify("任务已完成", "ok");
+    else if (job.status === "failed") notify(job.error || "任务失败", "error");
+    else notify("任务已停止");
+    await refreshAfterJob(job);
+  } catch (error) {
+    // Polling is the only thing that re-enables the buttons, so a failure must not leave the page
+    // stuck in its busy state.
+    state.poll = null;
+    setBusy(false);
+    notify(error.message, "error");
+  }
+}
+
+// A finished job changed the data on disk, so the panel reloads. Unsaved manual edits are the one
+// thing the reload cannot reproduce, so they hold it back and the user decides when to refresh.
+async function refreshAfterJob(job) {
+  if (job.type === "import") {
+    // An import replaced the tree; rows typed against the old one no longer exist.
+    if (state.dirty.size) {
+      state.dirty.clear();
+      updateDirtyLabel();
+      notify("导入已完成，未应用的修改已丢弃", "error");
+    }
+    await loadState(job.project || state.project);
+    return;
+  }
+  if (state.dirty.size) {
+    notify("任务已结束；未应用的修改仍保留在列表中，点“刷新”可载入最新数据", "error");
+    return;
+  }
+  if (!state.project && job.project) {
+    await loadState(job.project);
+  } else if (state.project) {
+    await selectProject(state.project, { loadEditor: false });
+    if (job.type === "translate" && !$("panel-logs").classList.contains("hidden")) {
+      await loadLogs();
+    }
+  }
+}
+
+function watchJob() {
+  clearTimeout(state.poll);
+  state.poll = setTimeout(pollJob, 300);
+}
+
+async function startJob(path, body) {
+  try {
+    await request(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setBusy(true);
+    setHint("任务进行中");
+    notify("任务已开始", "ok");
+    watchJob();
+  } catch (error) {
+    setHint("任务未开始");
+    notify(error.message, "error");
+  }
+}
+
+async function controlJob(action) {
+  if (!state.jobId) return;
+  try {
+    await request("/api/job/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId: state.jobId, action }),
+    });
+  } catch (error) {
+    notify(error.message, "error");
+  }
+}
+
+// ---- Request logs ----
+function logDetail(requestId) {
+  const box = document.createElement("div");
+  box.className = "log-detail";
+  const actions = document.createElement("div");
+  actions.className = "log-actions";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "复制 JSON";
+  copy.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(state.logs.detail.get(requestId) || "");
+      notify("已复制请求记录", "ok");
+    } catch {
+      notify("浏览器不允许访问剪贴板", "error");
+    }
+  });
+  actions.append(copy);
+  const pre = document.createElement("pre");
+  pre.textContent = state.logs.detail.get(requestId) || "读取中…";
+  box.append(actions, pre);
+  return box;
+}
+
+function renderLogRows() {
+  const list = $("log-list");
+  list.replaceChildren();
+  if (!state.logs.rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "hint";
+    empty.textContent = "没有匹配的请求记录";
+    list.append(empty);
+    return;
+  }
+  for (const row of state.logs.rows) {
+    const item = document.createElement("div");
+    item.className = "log-row";
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    if (row.requestId === state.logs.open) item.classList.add("open");
+    const time = document.createElement("span");
+    time.className = "log-time";
+    time.textContent = clockOf(row.startedAt);
+    const badge = document.createElement("span");
+    badge.className = `badge ${esc(row.status)}`;
+    badge.textContent = row.status;
+    const meta = document.createElement("span");
+    meta.className = "log-meta";
+    const pieces = [row.entryId || row.requestId.slice(0, 8)];
+    if (row.attempt) pieces.push(`第 ${row.attempt} 次`);
+    if (row.durationMs !== null) pieces.push(`${row.durationMs}ms`);
+    if (row.httpStatus) pieces.push(`HTTP ${row.httpStatus}`);
+    const tokens = row.usage?.total_tokens ?? row.usage?.totalTokens;
+    if (tokens) pieces.push(`${tokens} tok`);
+    meta.textContent = pieces.join(" · ");
+    if (row.error) meta.title = row.error;
+    const chev = document.createElement("span");
+    chev.className = "log-chev";
+    chev.textContent = "▶";
+    item.append(time, badge, meta, chev);
+    item.addEventListener("click", () => toggleLog(row.requestId));
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggleLog(row.requestId);
+    });
+    list.append(item);
+    if (row.requestId === state.logs.open) list.append(logDetail(row.requestId));
+  }
+}
+
+async function loadLogs() {
+  if (!state.project) {
+    $("log-hint").textContent = "未选择项目";
+    $("log-list").replaceChildren();
+    $("log-page").textContent = "";
+    return;
+  }
+  const params = new URLSearchParams({
+    name: state.project, offset: state.logs.offset, limit: state.logs.limit,
+  });
+  if (state.logs.status) params.set("status", state.logs.status);
+  if (state.logs.query) params.set("q", state.logs.query);
+  const data = await request(`/api/logs?${params}`);
+  state.logs.rows = data.rows;
+  state.logs.hasMore = data.hasMore;
+  const notes = [`扫描 ${data.scanned} 条`];
+  if (data.truncated) notes.push("只扫描了最近 2000 条，请用搜索缩小范围");
+  if (data.damaged) notes.push(`${data.damaged} 条无法解析`);
+  $("log-hint").textContent = notes.join(" · ");
+  $("log-page").textContent = `第 ${Math.floor(data.offset / data.limit) + 1} 页`;
+  $("log-prev").disabled = data.offset === 0;
+  $("log-next").disabled = !data.hasMore;
+  renderLogRows();
+}
+
+async function toggleLog(requestId) {
+  if (state.logs.open === requestId) {
+    state.logs.open = "";
+    renderLogRows();
+    return;
+  }
+  state.logs.open = requestId;
+  renderLogRows();
+  if (state.logs.detail.has(requestId)) return;
+  try {
+    const record = await request(`/api/log?name=${encodeURIComponent(state.project)}&id=${encodeURIComponent(requestId)}`);
+    state.logs.detail.set(requestId, JSON.stringify(record, null, 2));
+  } catch (error) {
+    notify(error.message, "error");
+    state.logs.open = "";
+  }
+  renderLogRows();
+}
+
+// ---- Wiring ----
+$("project-select").addEventListener("change", (event) => askEditorSwitch(event.target.value));
+$("refresh").addEventListener("click", () => loadState());
+
+$("api-save").addEventListener("click", async () => {
+  try {
+    const body = {
+      baseUrl: $("api-base").value.trim(),
+      model: $("api-model").value.trim(),
+      concurrency: Number($("api-conc").value),
+      attempts: Number($("api-attempts").value),
+    };
+    if ($("api-key").value) body.apiKey = $("api-key").value;
+    await request("/api/api-config", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    $("api-key").value = "";
+    notify("连接设置已保存", "ok");
+  } catch (error) { notify(error.message, "error"); }
+});
+
+$("api-test").addEventListener("click", async () => {
+  setHint("正在测试连接…");
+  try {
+    await request("/api/test-api", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: $("api-base").value.trim(), apiKey: $("api-key").value || undefined }),
+    });
+    setHint("就绪");
+    notify("连接正常", "ok");
+  } catch (error) {
+    setHint("就绪");
+    notify(error.message, "error");
+  }
+});
+
+$("import-run").addEventListener("click", async () => {
+  const file = $("import-file").files[0];
+  const name = $("import-name").value.trim();
+  if (!file) return notify("请选择源文件", "error");
+  if (!name) return notify("请填写项目名", "error");
+  const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+  try {
+    const response = await fetch("/api/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "x-project-name": name,
+        "x-importer-id": $("import-importer").value,
+        "x-source-extension": extension,
+        "x-source-file-name": encodeURIComponent(file.name),
+        "x-rebuild": $("import-rebuild").checked ? "true" : "false",
+      },
+      body: file,
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+    // The selection stays as it is until the import reports which project it produced. Clearing it
+    // here would leave the scope hint, the select and state.project disagreeing.
+    setBusy(true);
+    setHint("正在导入");
+    notify("正在导入源文件", "ok");
+    watchJob();
+  } catch (error) {
+    setBusy(false);
+    notify(error.message, "error");
+  }
+});
+
+$("translate-run").addEventListener("click", () => {
+  if (!state.project) return notify("请先选择项目", "error");
+  const body = { project: state.project };
+  for (const [field, element] of [["from", "tr-from"], ["to", "tr-to"], ["limit", "tr-limit"], ["concurrency", "tr-conc"]]) {
+    const value = $(element).value.trim();
+    if (value) body[field] = Number(value);
+  }
+  startJob("/api/translate", body);
+});
+
+$("build-run").addEventListener("click", () => {
+  if (!state.project) return notify("请先选择项目", "error");
+  const directory = $("build-dir").value.trim();
+  if (!directory) return notify("导出需要指定目录", "error");
+  startJob("/api/build", {
+    project: state.project,
+    directory,
+    filename: $("build-name").value.trim(),
+    raw: $("build-raw").checked,
+  });
+});
+
+for (const button of document.querySelectorAll("#filters button")) {
+  button.addEventListener("click", async () => {
+    for (const other of document.querySelectorAll("#filters button")) other.classList.remove("active");
+    button.classList.add("active");
+    state.statuses = button.dataset.statuses;
+    state.offset = 0;
+    await loadEntries().catch((error) => notify(error.message, "error"));
+  });
+}
+
+function runSearch() {
+  state.query = $("search").value.trim();
+  state.regex = $("search-regex").checked;
+  state.offset = 0;
+  loadEntries().catch((error) => notify(error.message, "error"));
+}
+$("search-run").addEventListener("click", runSearch);
+$("search").addEventListener("keydown", (event) => { if (event.key === "Enter") runSearch(); });
+
+$("apply-changed").addEventListener("click", async () => {
+  const changes = [...state.dirty.entries()].map(([id, translation]) => ({ id, translation }));
+  if (!changes.length) return notify("没有待应用的修改");
+  try { await applyEdits(changes); } catch (error) { notify(error.message, "error"); }
+});
+
+$("prev").addEventListener("click", () => {
+  state.offset = Math.max(0, state.offset - state.limit);
+  loadEntries().catch((error) => notify(error.message, "error"));
+});
+$("next").addEventListener("click", () => {
+  state.offset += state.limit;
+  loadEntries().catch((error) => notify(error.message, "error"));
+});
+
+$("prompts-save").addEventListener("click", async () => {
+  const project = state.project;
+  try {
+    await request("/api/prompts", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, table: JSON.parse($("prompts-text").value) }),
+    });
+    notify(project ? `提示词已保存到「${project}」` : "提示词已保存为全局默认值", "ok");
+  } catch (error) { notify(error.message, "error"); }
+});
+
+$("glossary-save").addEventListener("click", async () => {
+  const project = state.project;
+  try {
+    const value = JSON.parse($("glossary-text").value || "{}");
+    await request("/api/glossary", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, value }),
+    });
+    notify(project ? `术语表已保存到「${project}」` : "术语表已保存为全局默认值", "ok");
+  } catch (error) { notify(error.message, "error"); }
+});
+
+// The suggested file name follows the raw switch, so the two never disagree.
+$("build-raw").addEventListener("change", () => {
+  const project = state.project;
+  if (project) {
+    request(`/api/project?name=${encodeURIComponent(project)}`)
+      .then((info) => {
+        $("build-name").value = $("build-raw").checked ? info.rawOutputName : info.outputName;
+      })
+      .catch(() => {});
+  }
+});
+
+for (const button of document.querySelectorAll("#editor-tabs button")) {
+  button.addEventListener("click", () => {
+    for (const other of document.querySelectorAll("#editor-tabs button")) other.classList.remove("active");
+    button.classList.add("active");
+    const prompts = button.dataset.tab === "prompts";
+    $("tab-prompts").classList.toggle("hidden", !prompts);
+    $("tab-glossary").classList.toggle("hidden", prompts);
+  });
+}
+
+for (const button of document.querySelectorAll("#review-tabs button")) {
+  button.addEventListener("click", async () => {
+    for (const other of document.querySelectorAll("#review-tabs button")) other.classList.remove("active");
+    button.classList.add("active");
+    const logs = button.dataset.panel === "logs";
+    $("panel-review").classList.toggle("hidden", logs);
+    $("panel-logs").classList.toggle("hidden", !logs);
+    if (logs) await loadLogs().catch((error) => notify(error.message, "error"));
+  });
+}
+
+for (const button of document.querySelectorAll("#log-filters button")) {
+  button.addEventListener("click", async () => {
+    for (const other of document.querySelectorAll("#log-filters button")) other.classList.remove("active");
+    button.classList.add("active");
+    state.logs.status = button.dataset.logStatus;
+    state.logs.offset = 0;
+    state.logs.open = "";
+    await loadLogs().catch((error) => notify(error.message, "error"));
+  });
+}
+
+function runLogSearch() {
+  state.logs.query = $("log-search").value.trim();
+  state.logs.offset = 0;
+  state.logs.open = "";
+  loadLogs().catch((error) => notify(error.message, "error"));
+}
+$("log-search-run").addEventListener("click", runLogSearch);
+$("log-search").addEventListener("keydown", (event) => { if (event.key === "Enter") runLogSearch(); });
+$("log-refresh").addEventListener("click", () => loadLogs().catch((error) => notify(error.message, "error")));
+$("log-prev").addEventListener("click", () => {
+  state.logs.offset = Math.max(0, state.logs.offset - state.logs.limit);
+  state.logs.open = "";
+  loadLogs().catch((error) => notify(error.message, "error"));
+});
+$("log-next").addEventListener("click", () => {
+  if (!state.logs.hasMore) return;
+  state.logs.offset += state.logs.limit;
+  state.logs.open = "";
+  loadLogs().catch((error) => notify(error.message, "error"));
+});
+
+$("job-close").addEventListener("click", () => {
+  state.jobDismissed = state.jobId;
+  $("job").classList.remove("visible");
+});
+$("job-pause").addEventListener("click", () => controlJob("pause"));
+$("job-resume").addEventListener("click", () => controlJob("resume"));
+$("job-stop").addEventListener("click", () => controlJob("stop"));
+
+window.addEventListener("scroll", updateScrollProgress, { passive: true });
+window.addEventListener("resize", updateScrollProgress);
+updateScrollProgress();
+updateDirtyLabel();
+updateEditorScope();
+loadState()
+  .then(() => (state.project ? null : loadEditorContent()))
+  .catch((error) => notify(error.message, "error"));
+pollJob().catch(() => {});
+</script>
+</body>
+</html>

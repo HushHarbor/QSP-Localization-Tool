@@ -1,0 +1,20 @@
+{
+ "_description": "Global exclusion rules applied while importing. They decide which source strings enter the pool; they do not check translation quality. Keep only structural criteria that are independent of game content. exact contains literal strings; regex contains high-confidence code patterns and is case-insensitive. A false positive only leaves a string untranslated. Project-specific text and story values belong in project/<name>/rules/import-rules.json.",
+ "skip": {
+  "identifierLike": true,
+  "cssArg": true,
+  "wrapClass": true
+ },
+ "blacklist": {
+  "exact": [],
+  "regex": [
+   "href\\s*=\\s*\\\\?\"exec:\\s*dynamic",
+   "^\\s*[&|]\\s*(gt|gs|exec|dynamic|killvar|pln|msg|act|copyarr|killall)\\b",
+   "^(killvar|copyarr|killall)\\b",
+   "^[\\w$]+\\s*(=|\\+=|-=|\\*=|/=)[^=]",
+   "^[\\w$]+<<",
+   "<<\\s*rand\\s*\\(",
+   "^[\\w$]*''\\]"
+  ]
+ }
+}

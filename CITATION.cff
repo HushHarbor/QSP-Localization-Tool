@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "qsp-translate"
+abstract: >-
+  Local-first toolkit for importing, translating, reviewing and exporting QSP
+  games, Twine stories, chapter-based text, and localization maps. Provides a
+  browser UI and a CLI, with batch translation, pool statuses, and project data
+  stored as files.
+type: software
+authors:
+  - name: "HushHarbor"
+version: "2.0.0"
+date-released: 2026-11-05
+license: Apache-2.0
+repository-code: "https://github.com/HushHarbor/QSP-Localization-Tool"
+url: "https://github.com/HushHarbor/QSP-Localization-Tool"
