@@ -161,6 +161,28 @@ test("the web adapter imports, edits, and builds through application operations"
   assert.equal(missing.status, 404);
 });
 
+test("the interface defaults to English and both languages define every label", async () => {
+  const html = await promises.readFile(
+    new URL("../src/adapters/web/ui.html", import.meta.url), "utf8");
+
+  assert.match(html, /<html lang="en">/);
+  assert.match(html, /<title>Translation Workbench<\/title>/);
+
+  // Every key the page uses, whether it is a static data-i18n attribute or a t("...") call,
+  // has to exist in both dictionaries. A missing key would silently render as the key itself.
+  const keys = new Set();
+  for (const match of html.matchAll(/data-i18n(?:-ph|-aria)?="([^"]+)"/g)) keys.add(match[1]);
+  for (const match of html.matchAll(/\bt\("([a-zA-Z]+\.[a-zA-Z]+)"/g)) keys.add(match[1]);
+  assert.ok(keys.size > 50, `expected the page to use many keys, found ${keys.size}`);
+
+  const missing = [];
+  for (const key of keys) {
+    const defined = html.split(`"${key}":`).length - 1;
+    if (defined !== 2) missing.push(`${key} (defined ${defined} times)`);
+  }
+  assert.deepEqual(missing, []);
+});
+
 test("the log routes page through request records and return one in full", async (t) => {
   const name = uniqueName("ui-log");
   const source = qspFile([{

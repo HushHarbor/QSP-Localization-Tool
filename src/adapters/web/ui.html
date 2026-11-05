@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>翻译工作台</title>
+<title>Translation Workbench</title>
 <style>
   :root {
     color-scheme: light;
@@ -230,6 +230,11 @@
   .stack > * + * { margin-top: .6rem; }
   .muted { color: var(--text-muted); font-size: .82rem; }
   .hint { color: var(--text-faint); font-size: .8rem; margin-top: .45rem; }
+  /* The native file control prints its own wording in the browser's language, which would sit
+     next to labels in the app's language. A button and a file name keep the two in step. */
+  .file-pick { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+  .file-pick button { flex: 0 0 auto; }
+  .file-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inline { display: flex; align-items: center; gap: .45rem; margin-top: .6rem; font-size: .82rem; font-weight: 600; color: var(--text-muted); }
 
   /* Buttons */
@@ -506,16 +511,17 @@
 <body>
 <header class="app-header">
   <div class="brand">
-    <span class="brand-mark" aria-hidden="true">译</span>
+    <span class="brand-mark" aria-hidden="true" data-i18n="app.mark">译</span>
     <div>
-      <h1>翻译工作台</h1>
-      <p>导入 · 翻译 · 人工校验 · 导出</p>
+      <h1 data-i18n="app.title">翻译工作台</h1>
+      <p data-i18n="app.tagline">导入 · 翻译 · 人工校验 · 导出</p>
     </div>
   </div>
   <div class="header-actions">
-    <select id="project-select" aria-label="项目"><option value="">选择项目</option></select>
-    <button id="refresh" class="ghost">刷新</button>
-    <span id="state-hint">就绪</span>
+    <select id="project-select" data-i18n-aria="project.label"><option value="" data-i18n="project.pick">选择项目</option></select>
+    <button id="refresh" class="ghost" data-i18n="action.refresh">刷新</button>
+    <span id="state-hint" data-i18n="state.ready">就绪</span>
+    <button id="lang-toggle" class="ghost" title="Switch language">中文</button>
   </div>
 </header>
 
@@ -524,141 +530,147 @@
 <main class="layout">
   <div class="column">
     <section class="card">
-      <h2>连接设置</h2>
+      <h2 data-i18n="api.heading">连接设置</h2>
       <div class="stack">
-        <div><label for="api-base">服务地址</label><input id="api-base" placeholder="http://127.0.0.1:1234 或端口"></div>
-        <div><label for="api-model">模型</label><input id="api-model"></div>
-        <div><label for="api-key">API Key（留空保持不变）</label><input id="api-key" type="password" autocomplete="off"></div>
+        <div><label for="api-base" data-i18n="api.base">服务地址</label><input id="api-base" data-i18n-ph="api.basePlaceholder" placeholder="http://127.0.0.1:1234 或端口"></div>
+        <div><label for="api-model" data-i18n="api.model">模型</label><input id="api-model"></div>
+        <div><label for="api-key" data-i18n="api.key">API Key（留空保持不变）</label><input id="api-key" type="password" autocomplete="off"></div>
         <div class="row">
-          <div><label for="api-conc">并发</label><input id="api-conc" type="number" min="1"></div>
-          <div><label for="api-attempts">重试</label><input id="api-attempts" type="number" min="1"></div>
+          <div><label for="api-conc" data-i18n="api.concurrency">并发</label><input id="api-conc" type="number" min="1"></div>
+          <div><label for="api-attempts" data-i18n="api.attempts">重试</label><input id="api-attempts" type="number" min="1"></div>
         </div>
         <div class="row">
-          <button id="api-save" class="primary">保存</button>
-          <button id="api-test" class="ghost">测试连接</button>
+          <button id="api-save" class="primary" data-i18n="action.save">保存</button>
+          <button id="api-test" class="ghost" data-i18n="api.test">测试连接</button>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>项目初始化</h2>
+      <h2 data-i18n="import.heading">项目初始化</h2>
       <div class="stack">
-        <div><label for="import-file">源文件</label><input id="import-file" type="file"></div>
-        <div><label for="import-name">项目名</label><input id="import-name" placeholder="字母、数字、下划线、连字符"></div>
-        <div><label for="import-importer">导入器</label><select id="import-importer"></select></div>
-        <label class="inline"><input id="import-rebuild" type="checkbox"> 重新导入并保留能匹配的译文</label>
-        <button class="primary" id="import-run">导入</button>
+        <div><label for="import-file" data-i18n="import.file">源文件</label>
+          <div class="file-pick">
+            <input id="import-file" type="file" hidden>
+            <button id="import-file-button" class="ghost" type="button" data-i18n="import.choose">选择文件</button>
+            <span class="muted" id="import-file-name"></span>
+          </div>
+        </div>
+        <div><label for="import-name" data-i18n="import.name">项目名</label><input id="import-name" data-i18n-ph="import.namePlaceholder" placeholder="字母、数字、下划线、连字符"></div>
+        <div><label for="import-importer" data-i18n="import.importer">导入器</label><select id="import-importer"></select></div>
+        <label class="inline"><input id="import-rebuild" type="checkbox"> <span data-i18n="import.rebuild">重新导入并保留能匹配的译文</span></label>
+        <button class="primary" id="import-run" data-i18n="import.run">导入</button>
         <div class="hint" id="import-hint"></div>
       </div>
     </section>
 
     <section class="card">
-      <h2>项目状态</h2>
-      <div id="project-info" class="muted">尚未选择项目</div>
+      <h2 data-i18n="project.heading">项目状态</h2>
+      <div id="project-info" class="muted" data-i18n="project.none">尚未选择项目</div>
       <div id="project-summary"></div>
       <div class="stack" style="margin-top:.9rem">
         <div class="row">
-          <div><label for="tr-from">起始批次</label><input id="tr-from" type="number" min="1" placeholder="1"></div>
-          <div><label for="tr-to">结束批次</label><input id="tr-to" type="number" min="1" placeholder="末尾"></div>
+          <div><label for="tr-from" data-i18n="translate.from">起始批次</label><input id="tr-from" type="number" min="1" placeholder="1"></div>
+          <div><label for="tr-to" data-i18n="translate.to">结束批次</label><input id="tr-to" type="number" min="1" data-i18n-ph="translate.toPlaceholder" placeholder="末尾"></div>
         </div>
         <div class="row">
-          <div><label for="tr-limit">本次上限</label><input id="tr-limit" type="number" min="1" placeholder="不限"></div>
-          <div><label for="tr-conc">并发</label><input id="tr-conc" type="number" min="1" placeholder="6"></div>
+          <div><label for="tr-limit" data-i18n="translate.limit">本次上限</label><input id="tr-limit" type="number" min="1" data-i18n-ph="translate.limitPlaceholder" placeholder="不限"></div>
+          <div><label for="tr-conc" data-i18n="api.concurrency">并发</label><input id="tr-conc" type="number" min="1" placeholder="6"></div>
         </div>
-        <button class="primary" id="translate-run">开始翻译</button>
+        <button class="primary" id="translate-run" data-i18n="translate.run">开始翻译</button>
       </div>
     </section>
 
     <section class="card">
-      <h2>导出</h2>
+      <h2 data-i18n="build.heading">导出</h2>
       <div class="stack">
-        <div><label for="build-dir">目录（必填）</label><input id="build-dir" placeholder="导出到哪个目录"></div>
-        <div><label for="build-name">文件名</label><input id="build-name"></div>
-        <label class="inline"><input id="build-raw" type="checkbox"> 导出未翻译的原始文件</label>
-        <button class="build" id="build-run">导出</button>
+        <div><label for="build-dir" data-i18n="build.dir">目录（必填）</label><input id="build-dir" data-i18n-ph="build.dirPlaceholder" placeholder="导出到哪个目录"></div>
+        <div><label for="build-name" data-i18n="build.name">文件名</label><input id="build-name"></div>
+        <label class="inline"><input id="build-raw" type="checkbox"> <span data-i18n="build.raw">导出未翻译的原始文件</span></label>
+        <button class="build" id="build-run" data-i18n="build.run">导出</button>
       </div>
     </section>
 
     <section class="card">
-      <h2>项目设置</h2>
+      <h2 data-i18n="settings.heading">项目设置</h2>
       <div class="hint" id="editor-scope" style="margin:-.4rem 0 .7rem"></div>
       <div class="notice hidden" id="editor-switch">
         <div id="editor-switch-text"></div>
         <div class="row" style="margin-top:.55rem">
-          <button class="primary" id="editor-switch-load">载入</button>
-          <button class="ghost" id="editor-switch-keep">保留</button>
-          <button class="ghost" id="editor-switch-cancel">取消</button>
+          <button class="primary" id="editor-switch-load" data-i18n="settings.load">载入</button>
+          <button class="ghost" id="editor-switch-keep" data-i18n="settings.keep">保留</button>
+          <button class="ghost" id="editor-switch-cancel" data-i18n="action.cancel">取消</button>
         </div>
       </div>
       <div class="tabs" id="editor-tabs">
-        <button class="chip active" data-tab="prompts">提示词</button>
-        <button class="chip" data-tab="glossary">术语表</button>
+        <button class="chip active" data-tab="prompts" data-i18n="settings.prompts">提示词</button>
+        <button class="chip" data-tab="glossary" data-i18n="settings.glossary">术语表</button>
       </div>
       <div id="tab-prompts">
         <textarea id="prompts-text" spellcheck="false" style="min-height:260px"></textarea>
-        <button id="prompts-save" class="ghost" style="margin-top:.55rem">保存提示词</button>
+        <button id="prompts-save" class="ghost" style="margin-top:.55rem" data-i18n="settings.savePrompts">保存提示词</button>
       </div>
       <div id="tab-glossary" class="hidden">
         <textarea id="glossary-text" spellcheck="false" style="min-height:260px"></textarea>
-        <button id="glossary-save" class="ghost" style="margin-top:.55rem">保存术语表</button>
+        <button id="glossary-save" class="ghost" style="margin-top:.55rem" data-i18n="settings.saveGlossary">保存术语表</button>
       </div>
     </section>
   </div>
 
   <section class="card">
     <div class="tabs" id="review-tabs">
-      <button class="chip active" data-panel="review">人工校验</button>
-      <button class="chip" data-panel="logs">请求日志</button>
+      <button class="chip active" data-panel="review" data-i18n="review.heading">人工校验</button>
+      <button class="chip" data-panel="logs" data-i18n="logs.heading">请求日志</button>
     </div>
 
     <div id="panel-review">
       <div class="chips" id="filters">
-        <button class="chip active" data-statuses="">全部</button>
-        <button class="chip" data-statuses="manual,invalid,server_error">非 ok</button>
+        <button class="chip active" data-statuses="" data-i18n="filter.all">全部</button>
+        <button class="chip" data-statuses="manual,invalid,server_error" data-i18n="filter.notOk">非 ok</button>
         <button class="chip" data-statuses="manual">manual</button>
         <button class="chip" data-statuses="invalid">invalid</button>
         <button class="chip" data-statuses="server_error">server_error</button>
         <button class="chip" data-statuses="ok">ok</button>
       </div>
       <div class="row" style="margin-top:.6rem">
-        <input id="search" placeholder="关键词或正则">
-        <button id="search-run" class="ghost" style="flex:0 0 auto">搜索</button>
-        <label class="inline" style="margin:0;flex:0 0 auto"><input id="search-regex" type="checkbox"> 正则</label>
+        <input id="search" data-i18n-ph="review.searchPlaceholder" placeholder="关键词或正则">
+        <button id="search-run" class="ghost" style="flex:0 0 auto" data-i18n="action.search">搜索</button>
+        <label class="inline" style="margin:0;flex:0 0 auto"><input id="search-regex" type="checkbox"> <span data-i18n="review.regex">正则</span></label>
       </div>
       <div class="row" style="margin-top:.6rem">
-        <span class="muted" id="entries-hint">未选择项目</span>
+        <span class="muted" id="entries-hint" data-i18n="project.none">未选择项目</span>
         <span></span>
-        <button id="apply-changed" class="primary" style="flex:0 0 auto">应用修改</button>
+        <button id="apply-changed" class="primary" style="flex:0 0 auto" data-i18n="review.apply">应用修改</button>
       </div>
       <div class="entries" id="entries" style="margin-top:.6rem"></div>
       <div class="pager">
-        <button id="prev" class="ghost">上一页</button>
+        <button id="prev" class="ghost" data-i18n="action.prev">上一页</button>
         <span class="muted" id="page-hint"></span>
-        <button id="next" class="ghost">下一页</button>
+        <button id="next" class="ghost" data-i18n="action.next">下一页</button>
       </div>
     </div>
 
     <div id="panel-logs" class="hidden">
       <div class="chips" id="log-filters">
-        <button class="chip active" data-log-status="">全部</button>
-        <button class="chip" data-log-status="completed">完成</button>
-        <button class="chip" data-log-status="failed">失败</button>
-        <button class="chip" data-log-status="started">未完成</button>
+        <button class="chip active" data-log-status="" data-i18n="filter.all">全部</button>
+        <button class="chip" data-log-status="completed" data-i18n="logState.completed">完成</button>
+        <button class="chip" data-log-status="failed" data-i18n="logState.failed">失败</button>
+        <button class="chip" data-log-status="started" data-i18n="logState.started">未完成</button>
       </div>
       <div class="row" style="margin-top:.6rem">
-        <input id="log-search" placeholder="条目 ID、模型、原文或错误信息">
-        <button id="log-search-run" class="ghost" style="flex:0 0 auto">搜索</button>
+        <input id="log-search" data-i18n-ph="logs.searchPlaceholder" placeholder="条目 ID、模型、原文或错误信息">
+        <button id="log-search-run" class="ghost" style="flex:0 0 auto" data-i18n="action.search">搜索</button>
       </div>
       <div class="row" style="margin-top:.6rem">
-        <span class="muted" id="log-hint">未选择项目</span>
+        <span class="muted" id="log-hint" data-i18n="project.none">未选择项目</span>
         <span></span>
-        <button id="log-refresh" class="ghost" style="flex:0 0 auto">刷新</button>
+        <button id="log-refresh" class="ghost" style="flex:0 0 auto" data-i18n="action.refresh">刷新</button>
       </div>
       <div class="log-entry" id="log-list" style="margin-top:.6rem"></div>
       <div class="pager">
-        <button id="log-prev" class="ghost">上一页</button>
+        <button id="log-prev" class="ghost" data-i18n="action.prev">上一页</button>
         <span class="muted" id="log-page"></span>
-        <button id="log-next" class="ghost">下一页</button>
+        <button id="log-next" class="ghost" data-i18n="action.next">下一页</button>
       </div>
     </div>
   </section>
@@ -666,16 +678,16 @@
 
 <aside class="job" id="job">
   <h3>
-    <span id="job-title">任务</span>
+    <span id="job-title" data-i18n="job.title">任务</span>
     <span id="job-state" class="badge"></span>
   </h3>
   <div class="phase" id="job-phase"></div>
   <div class="bar"><i id="job-bar"></i></div>
   <div class="actions">
-    <button id="job-pause" class="ghost">暂停</button>
-    <button id="job-resume" class="ghost">继续</button>
-    <button id="job-stop" class="danger">停止</button>
-    <button id="job-close" class="ghost">关闭</button>
+    <button id="job-pause" class="ghost" data-i18n="job.pause">暂停</button>
+    <button id="job-resume" class="ghost" data-i18n="job.resume">继续</button>
+    <button id="job-stop" class="danger" data-i18n="job.stop">停止</button>
+    <button id="job-close" class="ghost" data-i18n="action.close">关闭</button>
   </div>
   <div class="logs" id="job-logs"></div>
 </aside>
@@ -684,9 +696,306 @@
 const $ = (id) => document.getElementById(id);
 const state = {
   project: "", statuses: "", query: "", regex: false, offset: 0, limit: 50,
-  entries: [], dirty: new Map(), jobId: null, poll: null, jobDismissed: null,
+  entries: [], dirty: new Map(), jobId: null, job: null, poll: null, jobDismissed: null,
   logs: { status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "", detail: new Map() },
 };
+
+// ---- Language ----
+// The interface ships in English and Chinese, English by default. The choice is remembered per
+// browser and never reaches the project data on disk.
+const MESSAGES = {
+  en: {
+    "app.mark": "T",
+    "app.title": "Translation Workbench",
+    "app.tagline": "Import · Translate · Review · Export",
+    "project.label": "Project",
+    "project.pick": "Select a project",
+    "action.refresh": "Refresh",
+    "action.save": "Save",
+    "action.cancel": "Cancel",
+    "action.search": "Search",
+    "action.prev": "Previous",
+    "action.next": "Next",
+    "action.close": "Close",
+    "state.ready": "Ready",
+    "api.heading": "Connection",
+    "api.base": "Endpoint",
+    "api.basePlaceholder": "http://127.0.0.1:1234 or a port",
+    "api.model": "Model",
+    "api.key": "API key (leave blank to keep)",
+    "api.concurrency": "Concurrency",
+    "api.attempts": "Retries",
+    "api.test": "Test connection",
+    "api.saved": "Connection settings saved",
+    "api.testing": "Testing the connection…",
+    "api.ok": "Connection OK",
+    "import.heading": "New project",
+    "import.file": "Source file",
+    "import.choose": "Choose file",
+    "import.noFile": "No file chosen",
+    "import.name": "Project name",
+    "import.namePlaceholder": "letters, digits, underscores, hyphens",
+    "import.importer": "Importer",
+    "import.rebuild": "Re-import and keep translations that still match",
+    "import.run": "Import",
+    "import.needFile": "Choose a source file",
+    "import.needName": "Enter a project name",
+    "import.running": "Importing",
+    "import.started": "Importing the source file",
+    "import.droppedEdits": "The import finished; changes that were not applied are gone",
+    "project.heading": "Project status",
+    "project.none": "No project selected",
+    "project.required": "Select a project first",
+    "project.meta": "{locations} locations · {batches} batches · {entries} entries · byte-exact rebuild {fixed}",
+    "project.layout": "Entries and translations live in this project's pool/; prompts, glossary, and import rules live in rule/",
+    "project.incompatible": "{count} older project(s) must be imported again",
+    "common.yes": "yes",
+    "common.no": "no",
+    "translate.from": "First batch",
+    "translate.to": "Last batch",
+    "translate.toPlaceholder": "end",
+    "translate.limit": "Run limit",
+    "translate.limitPlaceholder": "no limit",
+    "translate.run": "Start translation",
+    "build.heading": "Export",
+    "build.dir": "Directory (required)",
+    "build.dirPlaceholder": "Where to write the file",
+    "build.name": "File name",
+    "build.raw": "Export the untranslated source",
+    "build.run": "Export",
+    "build.needDir": "Choose a directory to export into",
+    "settings.heading": "Project settings",
+    "settings.load": "Load",
+    "settings.keep": "Keep",
+    "settings.prompts": "Prompts",
+    "settings.glossary": "Glossary",
+    "settings.savePrompts": "Save prompts",
+    "settings.saveGlossary": "Save glossary",
+    "settings.promptsSaved": "Prompts saved to \"{name}\"",
+    "settings.promptsSavedGlobal": "Prompts saved as the global default",
+    "settings.glossarySaved": "Glossary saved to \"{name}\"",
+    "settings.glossarySavedGlobal": "Glossary saved as the global default",
+    "editor.scopeProject": "Editing the prompts and glossary of \"{name}\". Saving affects this project only.",
+    "editor.scopeGlobal": "No project selected. The editor shows the global defaults a new project starts from.",
+    "editor.askProject": "Switch to \"{name}\" and load its prompts and glossary into the editor?",
+    "editor.askGlobal": "Switch to the global defaults and load them into the editor?",
+    "review.heading": "Review",
+    "review.searchPlaceholder": "Keyword or regular expression",
+    "review.regex": "Regex",
+    "review.apply": "Apply changes",
+    "review.applyCount": "Apply changes ({count})",
+    "review.matched": "{total} matched, showing {shown}",
+    "review.empty": "No matching entries",
+    "review.applied": "Applied {count} change(s)",
+    "review.nothingToApply": "There are no changes to apply",
+    "filter.all": "All",
+    "filter.notOk": "Not ok",
+    "summary.translated": "Translated",
+    "entry.changed": "changed",
+    "entry.reopen": "Clear manual",
+    "entry.reopenBlocked": "Apply your edits before clearing manual",
+    "entry.reopened": "Cleared the manual mark on {count} entry/entries",
+    "logs.heading": "Request log",
+    "logs.searchPlaceholder": "Entry ID, model, source text, or error",
+    "logState.completed": "Completed",
+    "logState.failed": "Failed",
+    "logState.started": "Unfinished",
+    "logState.running": "Running",
+    "logState.paused": "Paused",
+    "logState.stopped": "Stopped",
+    "log.copy": "Copy JSON",
+    "log.copied": "Request record copied",
+    "log.clipboardDenied": "The browser blocked clipboard access",
+    "log.loading": "Loading…",
+    "log.empty": "No matching request records",
+    "log.attempt": "attempt {n}",
+    "log.scanned": "scanned {count}",
+    "log.truncated": "only the newest 2000 were scanned; narrow it with a search",
+    "log.damaged": "{count} unreadable",
+    "log.page": "Page {n}",
+    "job.title": "Job",
+    "job.titleOf": "Job · {type}",
+    "job.pause": "Pause",
+    "job.resume": "Resume",
+    "job.stop": "Stop",
+    "job.completed": "Job completed",
+    "job.failed": "Job failed",
+    "job.stopped": "Job stopped",
+    "job.running": "Job running",
+    "job.started": "Job started",
+    "job.notStarted": "Job did not start",
+    "job.keptEdits": "The job ended; unapplied changes stay in the list. Refresh to load the latest data.",
+  },
+  zh: {
+    "app.mark": "译",
+    "app.title": "翻译工作台",
+    "app.tagline": "导入 · 翻译 · 人工校验 · 导出",
+    "project.label": "项目",
+    "project.pick": "选择项目",
+    "action.refresh": "刷新",
+    "action.save": "保存",
+    "action.cancel": "取消",
+    "action.search": "搜索",
+    "action.prev": "上一页",
+    "action.next": "下一页",
+    "action.close": "关闭",
+    "state.ready": "就绪",
+    "api.heading": "连接设置",
+    "api.base": "服务地址",
+    "api.basePlaceholder": "http://127.0.0.1:1234 或端口",
+    "api.model": "模型",
+    "api.key": "API Key（留空保持不变）",
+    "api.concurrency": "并发",
+    "api.attempts": "重试",
+    "api.test": "测试连接",
+    "api.saved": "连接设置已保存",
+    "api.testing": "正在测试连接…",
+    "api.ok": "连接正常",
+    "import.heading": "项目初始化",
+    "import.file": "源文件",
+    "import.choose": "选择文件",
+    "import.noFile": "未选择文件",
+    "import.name": "项目名",
+    "import.namePlaceholder": "字母、数字、下划线、连字符",
+    "import.importer": "导入器",
+    "import.rebuild": "重新导入并保留能匹配的译文",
+    "import.run": "导入",
+    "import.needFile": "请选择源文件",
+    "import.needName": "请填写项目名",
+    "import.running": "正在导入",
+    "import.started": "正在导入源文件",
+    "import.droppedEdits": "导入已完成，未应用的修改已丢弃",
+    "project.heading": "项目状态",
+    "project.none": "未选择项目",
+    "project.required": "请先选择项目",
+    "project.meta": "{locations} 个位置 · {batches} 个批次 · {entries} 条条目 · 固定点 {fixed}",
+    "project.layout": "条目与译文保存在本项目的 pool/，提示词、术语表、导入规则保存在 rule/",
+    "project.incompatible": "{count} 个旧项目需要重新导入",
+    "common.yes": "是",
+    "common.no": "否",
+    "translate.from": "起始批次",
+    "translate.to": "结束批次",
+    "translate.toPlaceholder": "末尾",
+    "translate.limit": "本次上限",
+    "translate.limitPlaceholder": "不限",
+    "translate.run": "开始翻译",
+    "build.heading": "导出",
+    "build.dir": "目录（必填）",
+    "build.dirPlaceholder": "导出到哪个目录",
+    "build.name": "文件名",
+    "build.raw": "导出未翻译的原始文件",
+    "build.run": "导出",
+    "build.needDir": "导出需要指定目录",
+    "settings.heading": "项目设置",
+    "settings.load": "载入",
+    "settings.keep": "保留",
+    "settings.prompts": "提示词",
+    "settings.glossary": "术语表",
+    "settings.savePrompts": "保存提示词",
+    "settings.saveGlossary": "保存术语表",
+    "settings.promptsSaved": "提示词已保存到「{name}」",
+    "settings.promptsSavedGlobal": "提示词已保存为全局默认值",
+    "settings.glossarySaved": "术语表已保存到「{name}」",
+    "settings.glossarySavedGlobal": "术语表已保存为全局默认值",
+    "editor.scopeProject": "当前编辑「{name}」的提示词和术语表，保存只影响本项目。",
+    "editor.scopeGlobal": "未选择项目，当前编辑全局默认值；新建项目从这里开始。",
+    "editor.askProject": "切换到「{name}」。是否把本项目的提示词和术语表载入编辑框？",
+    "editor.askGlobal": "切换到全局默认值。是否把全局的提示词和术语表载入编辑框？",
+    "review.heading": "人工校验",
+    "review.searchPlaceholder": "关键词或正则",
+    "review.regex": "正则",
+    "review.apply": "应用修改",
+    "review.applyCount": "应用修改 ({count})",
+    "review.matched": "{total} 条匹配，显示 {shown} 条",
+    "review.empty": "没有匹配的条目",
+    "review.applied": "已应用 {count} 条修改",
+    "review.nothingToApply": "没有待应用的修改",
+    "filter.all": "全部",
+    "filter.notOk": "非 ok",
+    "summary.translated": "已译",
+    "entry.changed": "已修改",
+    "entry.reopen": "取消 manual",
+    "entry.reopenBlocked": "先应用修改，再取消 manual",
+    "entry.reopened": "已取消 {count} 条 manual 标记",
+    "logs.heading": "请求日志",
+    "logs.searchPlaceholder": "条目 ID、模型、原文或错误信息",
+    "logState.completed": "完成",
+    "logState.failed": "失败",
+    "logState.started": "未完成",
+    "logState.running": "运行中",
+    "logState.paused": "已暂停",
+    "logState.stopped": "已停止",
+    "log.copy": "复制 JSON",
+    "log.copied": "已复制请求记录",
+    "log.clipboardDenied": "浏览器不允许访问剪贴板",
+    "log.loading": "读取中…",
+    "log.empty": "没有匹配的请求记录",
+    "log.attempt": "第 {n} 次",
+    "log.scanned": "扫描 {count} 条",
+    "log.truncated": "只扫描了最近 2000 条，请用搜索缩小范围",
+    "log.damaged": "{count} 条无法解析",
+    "log.page": "第 {n} 页",
+    "job.title": "任务",
+    "job.titleOf": "任务 · {type}",
+    "job.pause": "暂停",
+    "job.resume": "继续",
+    "job.stop": "停止",
+    "job.completed": "任务已完成",
+    "job.failed": "任务失败",
+    "job.stopped": "任务已停止",
+    "job.running": "任务进行中",
+    "job.started": "任务已开始",
+    "job.notStarted": "任务未开始",
+    "job.keptEdits": "任务已结束；未应用的修改仍保留在列表中，点“刷新”可载入最新数据",
+  },
+};
+
+const LANGUAGE_KEY = "qsp-ui-language";
+let lang = localStorage.getItem(LANGUAGE_KEY) === "zh" ? "zh" : "en";
+
+function t(key, params) {
+  const template = MESSAGES[lang][key] ?? MESSAGES.en[key] ?? key;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (whole, name) =>
+    Object.hasOwn(params, name) ? String(params[name]) : whole);
+}
+
+// Static markup carries its key, so one pass covers every label the page owns.
+function applyStaticLabels() {
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  document.title = t("app.title");
+  for (const node of document.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
+  for (const node of document.querySelectorAll("[data-i18n-ph]")) node.placeholder = t(node.dataset.i18nPh);
+  for (const node of document.querySelectorAll("[data-i18n-aria]")) {
+    node.setAttribute("aria-label", t(node.dataset.i18nAria));
+  }
+  // The project list is rebuilt from the server on every refresh, so its placeholder option is
+  // no longer the one the markup carried.
+  const placeholder = $("project-select").options[0];
+  if (placeholder && !placeholder.value) placeholder.textContent = t("project.pick");
+  $("lang-toggle").textContent = lang === "zh" ? "English" : "中文";
+  $("lang-toggle").setAttribute("aria-label", lang === "zh" ? "Switch to English" : "切换到中文");
+}
+
+// Text built in JavaScript depends on current state, so switching the language re-renders it
+// instead of translating a DOM snapshot. Unsaved edits survive the switch.
+async function setLanguage(next) {
+  lang = next === "zh" ? "zh" : "en";
+  localStorage.setItem(LANGUAGE_KEY, lang);
+  applyStaticLabels();
+  updateDirtyLabel();
+  updateEditorScope();
+  refreshFileName();
+  if (state.project) {
+    await selectProject(state.project, { loadEditor: false, keepDirty: true });
+  } else {
+    $("project-info").textContent = t("project.none");
+    $("entries-hint").textContent = t("project.none");
+    $("log-hint").textContent = t("project.none");
+  }
+  if (!$("panel-logs").classList.contains("hidden")) await loadLogs();
+  if (state.job) showJob(state.job);
+}
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -722,7 +1031,8 @@ function setBusy(busy) {
 
 function clockOf(iso) {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString("zh-CN", { hour12: false });
+  if (Number.isNaN(date.getTime())) return "--:--:--";
+  return date.toLocaleTimeString(lang === "zh" ? "zh-CN" : "en-GB", { hour12: false });
 }
 
 function updateScrollProgress() {
@@ -733,7 +1043,7 @@ function updateScrollProgress() {
 async function loadState(select = state.project) {
   const data = await request("/api/state");
   const selectEl = $("project-select");
-  selectEl.innerHTML = '<option value="">选择项目</option>' +
+  selectEl.innerHTML = `<option value="">${esc(t("project.pick"))}</option>` +
     data.projects.map((name) => `<option ${name === select ? "selected" : ""}>${esc(name)}</option>`).join("");
   $("import-importer").innerHTML = data.importers
     .map((importer) => `<option value="${esc(importer.id)}" ${importer.default ? "selected" : ""}>${esc(importer.label)}</option>`)
@@ -744,12 +1054,12 @@ async function loadState(select = state.project) {
   $("api-conc").value = api.concurrency || 6;
   $("api-attempts").value = api.attempts || 2;
   if (data.incompatible?.length) {
-    notify(`${data.incompatible.length} 个旧项目需要重新导入`, "error");
+    notify(t("project.incompatible", { count: data.incompatible.length }), "error");
   }
   if (select) await selectProject(select);
 }
 
-async function selectProject(name, { loadEditor = true } = {}) {
+async function selectProject(name, { loadEditor = true, keepDirty = false } = {}) {
   const target = name || "";
   // Fetch first: a project that disappeared must leave the panel on the previous project
   // instead of pointing the whole page at a name that answers 404 forever.
@@ -766,7 +1076,8 @@ async function selectProject(name, { loadEditor = true } = {}) {
   const changed = target !== state.project;
   state.project = target;
   state.offset = 0;
-  state.dirty.clear();
+  // A language switch re-renders the list; the rows the user typed into have to survive it.
+  if (!keepDirty) state.dirty.clear();
   updateDirtyLabel();
   updateEditorScope();
   if (changed) {
@@ -775,30 +1086,35 @@ async function selectProject(name, { loadEditor = true } = {}) {
     $("log-page").textContent = "";
   }
   if (!target) {
-    $("project-info").textContent = "尚未选择项目";
+    $("project-info").textContent = t("project.none");
     $("project-summary").innerHTML = "";
     $("entries").innerHTML = "";
-    $("entries-hint").textContent = "未选择项目";
-    $("log-hint").textContent = "未选择项目";
+    $("entries-hint").textContent = t("project.none");
+    $("log-hint").textContent = t("project.none");
     if (loadEditor) await loadEditorContent();
     return;
   }
   $("project-info").innerHTML =
     `<div>${esc(info.importer.label)} · ${esc(info.source.fileName)}</div>` +
-    `<div>${info.source.locations} 个位置 · ${info.stats.batches} 个批次 · ${info.stats.entries} 条条目 · 固定点 ${info.source.fixedPoint ? "是" : "否"}</div>` +
-    `<div>条目与译文保存在本项目的 pool/，提示词、术语表、导入规则保存在 rule/</div>`;
+    `<div>${esc(t("project.meta", {
+      locations: info.source.locations,
+      batches: info.stats.batches,
+      entries: info.stats.entries,
+      fixed: info.source.fixedPoint ? t("common.yes") : t("common.no"),
+    }))}</div>` +
+    `<div>${esc(t("project.layout"))}</div>`;
   renderSummary(info.summary);
   $("build-name").value = $("build-raw").checked ? info.rawOutputName : info.outputName;
   if (loadEditor) await loadEditorContent();
-  await loadEntries();
+  await loadEntries({ keepDirty });
 }
 
 // The editor follows the selected project: a project shows its own copy, and the empty
 // selection shows the global defaults a new project starts from.
 function updateEditorScope() {
   $("editor-scope").textContent = state.project
-    ? `当前编辑「${state.project}」的提示词和术语表，保存只影响本项目。`
-    : "未选择项目，当前编辑全局默认值；新建项目从这里开始。";
+    ? t("editor.scopeProject", { name: state.project })
+    : t("editor.scopeGlobal");
 }
 
 async function loadEditorContent() {
@@ -830,8 +1146,8 @@ function askEditorSwitch(name) {
   }
   pendingSwitch = target;
   $("editor-switch-text").textContent = target
-    ? `切换到「${target}」。是否把本项目的提示词和术语表载入编辑框？`
-    : "切换到全局默认值。是否把全局的提示词和术语表载入编辑框？";
+    ? t("editor.askProject", { name: target })
+    : t("editor.askGlobal");
   $("editor-switch").classList.remove("hidden");
 }
 
@@ -856,7 +1172,7 @@ function renderSummary(summary) {
   if (!summary) { container.innerHTML = ""; return; }
   const counts = summary.counts || {};
   const stats = [
-    ["已译", `${summary.translated}/${summary.entries}`],
+    [t("summary.translated"), `${summary.translated}/${summary.entries}`],
     ["ok", counts.ok ?? 0],
     ["manual", counts.manual ?? 0],
     ["invalid", counts.invalid ?? 0],
@@ -872,11 +1188,11 @@ function renderSummary(summary) {
 
 function updateDirtyLabel() {
   const count = state.dirty.size;
-  $("apply-changed").textContent = count ? `应用修改 (${count})` : "应用修改";
+  $("apply-changed").textContent = count ? t("review.applyCount", { count }) : t("review.apply");
   $("apply-changed").disabled = !count;
 }
 
-async function loadEntries() {
+async function loadEntries({ keepDirty = false } = {}) {
   if (!state.project) return;
   const params = new URLSearchParams({ name: state.project, offset: state.offset, limit: state.limit });
   if (state.statuses) params.set("status", state.statuses);
@@ -884,13 +1200,18 @@ async function loadEntries() {
   if (state.regex) params.set("regex", "true");
   const data = await request(`/api/entries?${params}`);
   state.entries = data.rows;
+  // Keep only edits whose row survived the reload; anything else is gone either way.
+  const kept = keepDirty
+    ? [...state.dirty].filter(([id]) => data.rows.some((row) => row.id === id))
+    : [];
   state.dirty.clear();
+  for (const [id, value] of kept) state.dirty.set(id, value);
   updateDirtyLabel();
   renderSummary(data.summary);
-  $("entries-hint").textContent = `${data.total} 条匹配，显示 ${data.rows.length} 条`;
+  $("entries-hint").textContent = t("review.matched", { total: data.total, shown: data.rows.length });
   $("page-hint").textContent = `${data.offset + 1}–${data.offset + data.rows.length} / ${data.total}`;
   const container = $("entries");
-  container.innerHTML = data.rows.length ? "" : '<div class="hint">没有匹配的条目</div>';
+  container.innerHTML = data.rows.length ? "" : `<div class="hint">${esc(t("review.empty"))}</div>`;
   for (const row of data.rows) {
     const item = document.createElement("div");
     item.className = "entry";
@@ -900,9 +1221,9 @@ async function loadEntries() {
       `<span class="id">${esc(row.id)}</span>` +
       `<span class="badge ${esc(row.status)}">${esc(row.status)}</span>` +
       `<span class="muted">${esc(row.batchName)}</span>` +
-      `<span class="flag">已修改</span>` +
+      `<span class="flag">${esc(t("entry.changed"))}</span>` +
       (row.status === "manual"
-        ? `<button class="ghost reopen" data-id="${esc(row.id)}">取消 manual</button>`
+        ? `<button class="ghost reopen" data-id="${esc(row.id)}">${esc(t("entry.reopen"))}</button>`
         : "") +
       `</div>` +
       `<div class="src">${esc(row.source)}</div>` +
@@ -910,6 +1231,10 @@ async function loadEntries() {
       (row.error ? `<div class="err">${esc(row.error)}</div>` : "");
     const textarea = item.querySelector("textarea");
     textarea.dataset.original = row.translation;
+    if (state.dirty.has(row.id)) {
+      textarea.value = state.dirty.get(row.id);
+      item.classList.add("changed");
+    }
     textarea.addEventListener("input", () => {
       if (textarea.value !== textarea.dataset.original) {
         state.dirty.set(row.id, textarea.value);
@@ -929,7 +1254,7 @@ async function loadEntries() {
 // text in the box for reference.
 async function reopenEntry(id) {
   if (state.dirty.size) {
-    notify("先应用修改，再取消 manual", "error");
+    notify(t("entry.reopenBlocked"), "error");
     return;
   }
   const result = await request("/api/reopen", {
@@ -937,7 +1262,7 @@ async function reopenEntry(id) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ project: state.project, ids: [id] }),
   });
-  notify(`已取消 ${result.updated} 条 manual 标记`, "ok");
+  notify(t("entry.reopened", { count: result.updated }), "ok");
   await loadEntries();
 }
 
@@ -948,19 +1273,20 @@ async function applyEdits(changes) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ project: state.project, changes }),
   });
-  notify(`已应用 ${result.updated} 条修改`, "ok");
+  notify(t("review.applied", { count: result.updated }), "ok");
   await loadEntries();
   const info = await request(`/api/project?name=${encodeURIComponent(state.project)}`);
   renderSummary(info.summary);
 }
 
 // ---- Jobs ----
+// Status keys, not labels: the label depends on the language and the badge style does not.
 const JOB_STATES = {
-  running: ["运行中", "running"],
-  paused: ["已暂停", "invalid"],
-  completed: ["已完成", "completed"],
-  failed: ["失败", "failed"],
-  stopped: ["已停止", ""],
+  running: ["logState.running", "running"],
+  paused: ["logState.paused", "invalid"],
+  completed: ["logState.completed", "completed"],
+  failed: ["logState.failed", "failed"],
+  stopped: ["logState.stopped", ""],
 };
 
 function appendLogLine(view, text, label, kind = "") {
@@ -990,13 +1316,14 @@ function renderJobLogs(logs, result, error) {
 
 function showJob(job) {
   state.jobId = job.id;
+  state.job = job;
   // Reopening a panel the user closed would make the close button useless.
   if (state.jobDismissed !== job.id) $("job").classList.add("visible");
-  $("job-title").textContent = `任务 · ${job.type}`;
+  $("job-title").textContent = t("job.titleOf", { type: job.type });
   const key = job.status === "running" && job.controlState === "paused" ? "paused" : job.status;
-  const [label, kind] = JOB_STATES[key] || [job.status, ""];
+  const [labelKey, kind] = JOB_STATES[key] || [null, ""];
   const badge = $("job-state");
-  badge.textContent = label;
+  badge.textContent = labelKey ? t(labelKey) : job.status;
   badge.className = `badge ${kind}`;
   $("job-phase").textContent = `${job.progress.phase} ${job.progress.completed}/${job.progress.total} (${job.progress.percent}%)`;
   $("job-bar").style.width = `${job.progress.percent}%`;
@@ -1017,11 +1344,12 @@ async function pollJob() {
       return;
     }
     state.poll = null;
-    setHint(JOB_STATES[job.status]?.[0] || job.status);
+    const stateKey = JOB_STATES[job.status]?.[0];
+    setHint(stateKey ? t(stateKey) : job.status);
     setBusy(false);
-    if (job.status === "completed") notify("任务已完成", "ok");
-    else if (job.status === "failed") notify(job.error || "任务失败", "error");
-    else notify("任务已停止");
+    if (job.status === "completed") notify(t("job.completed"), "ok");
+    else if (job.status === "failed") notify(job.error || t("job.failed"), "error");
+    else notify(t("job.stopped"));
     await refreshAfterJob(job);
   } catch (error) {
     // Polling is the only thing that re-enables the buttons, so a failure must not leave the page
@@ -1040,13 +1368,13 @@ async function refreshAfterJob(job) {
     if (state.dirty.size) {
       state.dirty.clear();
       updateDirtyLabel();
-      notify("导入已完成，未应用的修改已丢弃", "error");
+      notify(t("import.droppedEdits"), "error");
     }
     await loadState(job.project || state.project);
     return;
   }
   if (state.dirty.size) {
-    notify("任务已结束；未应用的修改仍保留在列表中，点“刷新”可载入最新数据", "error");
+    notify(t("job.keptEdits"), "error");
     return;
   }
   if (!state.project && job.project) {
@@ -1072,11 +1400,11 @@ async function startJob(path, body) {
       body: JSON.stringify(body),
     });
     setBusy(true);
-    setHint("任务进行中");
-    notify("任务已开始", "ok");
+    setHint(t("job.running"));
+    notify(t("job.started"), "ok");
     watchJob();
   } catch (error) {
-    setHint("任务未开始");
+    setHint(t("job.notStarted"));
     notify(error.message, "error");
   }
 }
@@ -1102,19 +1430,19 @@ function logDetail(requestId) {
   actions.className = "log-actions";
   const copy = document.createElement("button");
   copy.type = "button";
-  copy.textContent = "复制 JSON";
+  copy.textContent = t("log.copy");
   copy.addEventListener("click", async (event) => {
     event.stopPropagation();
     try {
       await navigator.clipboard.writeText(state.logs.detail.get(requestId) || "");
-      notify("已复制请求记录", "ok");
+      notify(t("log.copied"), "ok");
     } catch {
-      notify("浏览器不允许访问剪贴板", "error");
+      notify(t("log.clipboardDenied"), "error");
     }
   });
   actions.append(copy);
   const pre = document.createElement("pre");
-  pre.textContent = state.logs.detail.get(requestId) || "读取中…";
+  pre.textContent = state.logs.detail.get(requestId) || t("log.loading");
   box.append(actions, pre);
   return box;
 }
@@ -1125,7 +1453,7 @@ function renderLogRows() {
   if (!state.logs.rows.length) {
     const empty = document.createElement("div");
     empty.className = "hint";
-    empty.textContent = "没有匹配的请求记录";
+    empty.textContent = t("log.empty");
     list.append(empty);
     return;
   }
@@ -1144,7 +1472,7 @@ function renderLogRows() {
     const meta = document.createElement("span");
     meta.className = "log-meta";
     const pieces = [row.entryId || row.requestId.slice(0, 8)];
-    if (row.attempt) pieces.push(`第 ${row.attempt} 次`);
+    if (row.attempt) pieces.push(t("log.attempt", { n: row.attempt }));
     if (row.durationMs !== null) pieces.push(`${row.durationMs}ms`);
     if (row.httpStatus) pieces.push(`HTTP ${row.httpStatus}`);
     const tokens = row.usage?.total_tokens ?? row.usage?.totalTokens;
@@ -1168,7 +1496,7 @@ function renderLogRows() {
 
 async function loadLogs() {
   if (!state.project) {
-    $("log-hint").textContent = "未选择项目";
+    $("log-hint").textContent = t("project.none");
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
     return;
@@ -1181,11 +1509,11 @@ async function loadLogs() {
   const data = await request(`/api/logs?${params}`);
   state.logs.rows = data.rows;
   state.logs.hasMore = data.hasMore;
-  const notes = [`扫描 ${data.scanned} 条`];
-  if (data.truncated) notes.push("只扫描了最近 2000 条，请用搜索缩小范围");
-  if (data.damaged) notes.push(`${data.damaged} 条无法解析`);
+  const notes = [t("log.scanned", { count: data.scanned })];
+  if (data.truncated) notes.push(t("log.truncated"));
+  if (data.damaged) notes.push(t("log.damaged", { count: data.damaged }));
   $("log-hint").textContent = notes.join(" · ");
-  $("log-page").textContent = `第 ${Math.floor(data.offset / data.limit) + 1} 页`;
+  $("log-page").textContent = t("log.page", { n: Math.floor(data.offset / data.limit) + 1 });
   $("log-prev").disabled = data.offset === 0;
   $("log-next").disabled = !data.hasMore;
   renderLogRows();
@@ -1210,7 +1538,18 @@ async function toggleLog(requestId) {
   renderLogRows();
 }
 
+// The chosen file's name is content, not a label: it survives a language switch.
+function refreshFileName() {
+  const file = $("import-file").files[0];
+  $("import-file-name").textContent = file ? file.name : t("import.noFile");
+}
+
 // ---- Wiring ----
+$("lang-toggle").addEventListener("click", () => {
+  setLanguage(lang === "zh" ? "en" : "zh").catch((error) => notify(error.message, "error"));
+});
+$("import-file-button").addEventListener("click", () => $("import-file").click());
+$("import-file").addEventListener("change", refreshFileName);
 $("project-select").addEventListener("change", (event) => askEditorSwitch(event.target.value));
 $("refresh").addEventListener("click", () => loadState());
 
@@ -1227,21 +1566,21 @@ $("api-save").addEventListener("click", async () => {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     $("api-key").value = "";
-    notify("连接设置已保存", "ok");
+    notify(t("api.saved"), "ok");
   } catch (error) { notify(error.message, "error"); }
 });
 
 $("api-test").addEventListener("click", async () => {
-  setHint("正在测试连接…");
+  setHint(t("api.testing"));
   try {
     await request("/api/test-api", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ baseUrl: $("api-base").value.trim(), apiKey: $("api-key").value || undefined }),
     });
-    setHint("就绪");
-    notify("连接正常", "ok");
+    setHint(t("state.ready"));
+    notify(t("api.ok"), "ok");
   } catch (error) {
-    setHint("就绪");
+    setHint(t("state.ready"));
     notify(error.message, "error");
   }
 });
@@ -1249,8 +1588,8 @@ $("api-test").addEventListener("click", async () => {
 $("import-run").addEventListener("click", async () => {
   const file = $("import-file").files[0];
   const name = $("import-name").value.trim();
-  if (!file) return notify("请选择源文件", "error");
-  if (!name) return notify("请填写项目名", "error");
+  if (!file) return notify(t("import.needFile"), "error");
+  if (!name) return notify(t("import.needName"), "error");
   const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
   try {
     const response = await fetch("/api/import", {
@@ -1270,8 +1609,8 @@ $("import-run").addEventListener("click", async () => {
     // The selection stays as it is until the import reports which project it produced. Clearing it
     // here would leave the scope hint, the select and state.project disagreeing.
     setBusy(true);
-    setHint("正在导入");
-    notify("正在导入源文件", "ok");
+    setHint(t("import.running"));
+    notify(t("import.started"), "ok");
     watchJob();
   } catch (error) {
     setBusy(false);
@@ -1280,7 +1619,7 @@ $("import-run").addEventListener("click", async () => {
 });
 
 $("translate-run").addEventListener("click", () => {
-  if (!state.project) return notify("请先选择项目", "error");
+  if (!state.project) return notify(t("project.required"), "error");
   const body = { project: state.project };
   for (const [field, element] of [["from", "tr-from"], ["to", "tr-to"], ["limit", "tr-limit"], ["concurrency", "tr-conc"]]) {
     const value = $(element).value.trim();
@@ -1290,9 +1629,9 @@ $("translate-run").addEventListener("click", () => {
 });
 
 $("build-run").addEventListener("click", () => {
-  if (!state.project) return notify("请先选择项目", "error");
+  if (!state.project) return notify(t("project.required"), "error");
   const directory = $("build-dir").value.trim();
-  if (!directory) return notify("导出需要指定目录", "error");
+  if (!directory) return notify(t("build.needDir"), "error");
   startJob("/api/build", {
     project: state.project,
     directory,
@@ -1322,7 +1661,7 @@ $("search").addEventListener("keydown", (event) => { if (event.key === "Enter") 
 
 $("apply-changed").addEventListener("click", async () => {
   const changes = [...state.dirty.entries()].map(([id, translation]) => ({ id, translation }));
-  if (!changes.length) return notify("没有待应用的修改");
+  if (!changes.length) return notify(t("review.nothingToApply"));
   try { await applyEdits(changes); } catch (error) { notify(error.message, "error"); }
 });
 
@@ -1342,7 +1681,7 @@ $("prompts-save").addEventListener("click", async () => {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project, table: JSON.parse($("prompts-text").value) }),
     });
-    notify(project ? `提示词已保存到「${project}」` : "提示词已保存为全局默认值", "ok");
+    notify(project ? t("settings.promptsSaved", { name: project }) : t("settings.promptsSavedGlobal"), "ok");
   } catch (error) { notify(error.message, "error"); }
 });
 
@@ -1354,7 +1693,7 @@ $("glossary-save").addEventListener("click", async () => {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project, value }),
     });
-    notify(project ? `术语表已保存到「${project}」` : "术语表已保存为全局默认值", "ok");
+    notify(project ? t("settings.glossarySaved", { name: project }) : t("settings.glossarySavedGlobal"), "ok");
   } catch (error) { notify(error.message, "error"); }
 });
 
@@ -1434,6 +1773,8 @@ $("job-stop").addEventListener("click", () => controlJob("stop"));
 window.addEventListener("scroll", updateScrollProgress, { passive: true });
 window.addEventListener("resize", updateScrollProgress);
 updateScrollProgress();
+applyStaticLabels();
+refreshFileName();
 updateDirtyLabel();
 updateEditorScope();
 loadState()
