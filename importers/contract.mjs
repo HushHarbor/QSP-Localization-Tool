@@ -285,21 +285,6 @@ export function stripStructure(text, pattern) {
   return String(text).replace(new RegExp(pattern.source, flags), "");
 }
 
-export function truncateKeepingStructure(text, max, pattern) {
-  if (!(pattern instanceof RegExp)) throw new Error("truncateKeepingStructure requires the importer's mask pattern");
-  const value = String(text);
-  if (value.length <= max) return value;
-  let cut = max;
-  for (const match of value.matchAll(pattern)) {
-    if (match.index >= cut) break;
-    if (cut < match.index + match[0].length) {
-      cut = match.index;
-      break;
-    }
-  }
-  return value.slice(0, cut).trimEnd();
-}
-
 // ---- Import rules ----
 export function emptyRules() {
   return { blacklist: { exact: new Set(), regex: [] }, skip: {} };
@@ -403,9 +388,7 @@ export function defineImporter(config) {
       ? maskStructure(source, slots, pattern)
       : { text: String(source), slots, markerExample: "" })),
     unmask: config.unmask || ((text, slots) => (pattern ? unmaskStructure(text, slots) : String(text))),
-    truncate: config.truncate || ((text, max) => (pattern
-      ? truncateKeepingStructure(text, max, pattern)
-      : String(text).slice(0, max).trimEnd())),
+
     sourceDigest: config.sourceDigest || defaultSourceDigest,
   };
 }

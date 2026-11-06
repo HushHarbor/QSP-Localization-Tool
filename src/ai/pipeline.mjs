@@ -13,7 +13,9 @@ export class OutputFailure extends Error {}
 
 const RETRY_NOTICE = "\n\n结构校验未通过：{{REASON}}。请重新生成完整译文，只输出译文，并逐字保留结构标记。";
 
-function neighbors(entries, index, entriesPerSide, truncate) {
+// Neighbours are attached whole. A reader of the prompt needs the sentence around the entry, and
+// a character cap would cut exactly the part that carries the context.
+function neighbors(entries, index, entriesPerSide) {
   const lines = [];
   const radius = Math.min(entriesPerSide, entries.length - 1);
   for (let distance = -radius; distance <= radius; distance++) {
@@ -21,9 +23,8 @@ function neighbors(entries, index, entriesPerSide, truncate) {
     const current = entries[index + distance];
     if (!current?.translation.trim()) continue;
     const tag = distance < 0 ? `[prev${-distance}]` : `[next${distance}]`;
-    lines.push(`${tag} ${truncate(
-      `${current.source} => ${current.translation}`.replace(/\s+/g, " "), 120,
-    )}`);
+    const source = String(current.source).replace(/\s+/g, " ");
+    lines.push(`${tag} ${source} => ${current.translation}`);
   }
   return lines.join("\n");
 }
@@ -206,7 +207,7 @@ export async function translateBatches({
         const translation = await translateEntry({
           entry,
           current: entry.translation,
-          context: neighbors(batch.entries, index, contextEntriesPerSide, importer.truncate),
+          context: neighbors(batch.entries, index, contextEntriesPerSide),
           importer,
           prompts,
           chat,

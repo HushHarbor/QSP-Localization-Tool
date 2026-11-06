@@ -13,9 +13,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
 const STATUSES = new Set(["started", "completed", "failed", "aborted"]);
 const MAX_PAGE = 200;
-// One entry is a paragraph, so an answer is short. The cap only guards a runaway response from
-// bloating a list page, which carries one of these per row.
-const MAX_RESPONSE = 2000;
 
 export const requestLogDir = (project) => join(logDir(project), "ai-requests");
 export const requestLogFile = (project, requestId) => join(requestLogDir(project), `${requestId}.json`);
@@ -75,7 +72,7 @@ function summaryOf(record) {
     error: record.error?.message || null,
     // What the model answered, so the list can show the translation next to the request without
     // a second round trip for the full record.
-    response: typeof record.response === "string" ? record.response.slice(0, MAX_RESPONSE) : null,
+    response: typeof record.response === "string" ? record.response : null,
   };
 }
 

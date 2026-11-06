@@ -217,6 +217,15 @@
     transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
   }
   input:hover:not(:disabled), select:hover, textarea:hover { border-color: #d3a9ba; }
+  /* A locked field has to look locked: the custom background would otherwise hide the browser's
+     own disabled styling and leave it looking editable. */
+  input:disabled, select:disabled, textarea:disabled {
+    color: var(--text-faint);
+    background: var(--surface-sunken);
+    border-color: var(--border);
+    cursor: not-allowed;
+    resize: none;
+  }
   input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--rose);
@@ -1082,8 +1091,22 @@ function notify(text, kind = "info") {
   }, kind === "error" ? 9000 : 4200);
 }
 
+// A running job holds the project lock and has already read the prompts, glossary, and API
+// settings, so editing any of them while it runs either does nothing or races the job. The import
+// and export cards are locked for the same reason: their buttons do nothing while a job runs, and
+// a filled-in form that cannot be submitted is worse than a visibly disabled one.
+const LOCKED_WHILE_BUSY = [
+  "api-base", "api-model", "api-key", "api-conc", "api-attempts", "api-save", "api-test",
+  "prompts-text", "prompts-save", "glossary-text", "glossary-save",
+  "import-file-button", "import-name", "import-importer", "import-rebuild",
+  "build-dir", "build-name", "build-raw",
+];
+
 function setBusy(busy) {
   for (const id of ["import-run", "translate-run", "build-run", "refresh", "shutdown"]) $(id).disabled = busy;
+  for (const id of LOCKED_WHILE_BUSY) $(id).disabled = busy;
+  // The job object lags the click that started it, so the click's own state is authoritative here.
+  syncEntryLocks(busy);
 }
 
 function clockOf(iso) {
@@ -1247,10 +1270,17 @@ function renderSummary(summary) {
     `<div class="bar"><i style="width:${percent}%"></i></div>`;
 }
 
+// A running job holds the project lock, so an edit applied now would be refused by the server.
+// Locking the boxes says so before the reader types a whole correction.
+function syncEntryLocks(locked = jobRunning()) {
+  for (const node of document.querySelectorAll("#entries textarea, #entries .reopen")) node.disabled = locked;
+  $("apply-changed").disabled = locked || !state.dirty.size;
+}
+
 function updateDirtyLabel() {
   const count = state.dirty.size;
   $("apply-changed").textContent = count ? t("review.applyCount", { count }) : t("review.apply");
-  $("apply-changed").disabled = !count;
+  $("apply-changed").disabled = jobRunning() || !count;
 }
 
 async function loadEntries({ keepDirty = false, force = false } = {}) {
@@ -1303,11 +1333,11 @@ function renderEntries(rows) {
       `<span class="muted">${esc(row.batchName)}</span>` +
       `<span class="flag">${esc(t("entry.changed"))}</span>` +
       (row.status === "manual"
-        ? `<button class="ghost reopen" data-id="${esc(row.id)}">${esc(t("entry.reopen"))}</button>`
+        ? `<button class="ghost reopen" data-id="${esc(row.id)}"${jobRunning() ? " disabled" : ""}>${esc(t("entry.reopen"))}</button>`
         : "") +
       `</div>` +
       `<div class="src">${esc(row.source)}</div>` +
-      `<textarea spellcheck="false">${esc(row.translation)}</textarea>` +
+      `<textarea spellcheck="false"${jobRunning() ? " disabled" : ""}>${esc(row.translation)}</textarea>` +
       (row.error ? `<div class="err">${esc(row.error)}</div>` : "");
     const textarea = item.querySelector("textarea");
     textarea.dataset.original = row.translation;
@@ -1412,6 +1442,9 @@ function showJob(job) {
   $("job-pause").disabled = !running || !job.controllable;
   $("job-resume").disabled = !running || !job.controllable;
   $("job-stop").disabled = !running || !job.controllable;
+  // The page may be opened while a job is already running, so the lock follows the job itself
+  // instead of only the click that started it.
+  setBusy(running);
   syncFollow();
 }
 
