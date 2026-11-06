@@ -30,6 +30,7 @@ export function projectInfo(name, { snapshot = false } = {}) {
   return {
     name,
     importer: { id: importer.id, label: importer.label },
+    options: project.options || {},
     source: {
       fileName: project.source.fileName,
       locations: project.source.locations,

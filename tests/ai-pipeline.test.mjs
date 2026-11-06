@@ -102,8 +102,33 @@ test("a transport failure becomes server_error without clearing the translation"
   assert.match(entry.error, /HTTP 500/);
 });
 
-test("a manual edit is left alone and limit caps the run", async (t) => {
-  const name = uniqueName("ai-manual");
+test("neighbouring translations are attached as context, whole and as many as asked", async (t) => {
+  const name = uniqueName("ai-context");
+  setup(t, name);
+  // Longer than any plausible character cap, so a trim would be visible in the prompt.
+  const longTranslation = "这是一段刻意写得很长的译文，用来证明上下文里的邻居没有被截断。".repeat(6);
+  editPool(name, { "A locked door.": longTranslation });
+
+  const seen = [];
+  const transport = async (_system, prompt) => {
+    seen.push(prompt);
+    const marker = markerOf(prompt);
+    return marker ? `说 ${marker} 吧` : "新译文";
+  };
+
+  await translateProject({ name, options: { concurrency: 1, attempts: 1, limit: 1, contextEntriesPerSide: 1 }, transport });
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /\[(prev|next)1\] A locked door\. => /);
+  assert.ok(seen[0].includes(longTranslation), "the neighbour is attached untrimmed");
+
+  // Zero turns the whole section off: no neighbour lines at all.
+  seen.length = 0;
+  await translateProject({ name, options: { concurrency: 1, attempts: 1, limit: 1, contextEntriesPerSide: 0 }, transport });
+  assert.equal(seen.length, 1);
+  assert.doesNotMatch(seen[0], /\[prev\d\]|\[next\d\]/);
+});
+
+test("a manual edit is left alone and limit caps the run", async (t) => {  const name = uniqueName("ai-manual");
   const project = setup(t, name);
   editPool(name, { "Hello there.": "你好。" });
   const seen = [];

@@ -1,11 +1,9 @@
 // API configuration: shape, validation, and storage normalization.
 //
-// Settings describe one OpenAI-compatible endpoint. They never contain workflow state.
-export const API_NUMERIC_FIELDS = [
-  "concurrency", "attempts", "timeoutMs", "maxOutputTokens", "contextEntriesPerSide",
-];
+// Settings describe one OpenAI-compatible endpoint. They never contain workflow state, and they
+// never carry the numbers that decide how much a run translates: those are stored per project.
+export const API_NUMERIC_FIELDS = ["timeoutMs", "maxOutputTokens"];
 export const API_STYLES = ["auto", "responses", "chat"];
-export const DEFAULT_CONTEXT_ENTRIES_PER_SIDE = 3;
 export const RESERVED_BODY_FIELDS = ["model", "input", "messages", "max_tokens", "max_output_tokens"];
 
 const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
@@ -79,10 +77,9 @@ export function validateApiConfig(config) {
     }
   }
   for (const field of API_NUMERIC_FIELDS) {
-    const minimum = field === "contextEntriesPerSide" ? 0 : 1;
     if (config[field] !== undefined &&
-        (!Number.isSafeInteger(config[field]) || config[field] < minimum)) {
-      throw new Error(`API config field "${field}" must be ${minimum === 0 ? "a non-negative integer" : "a positive integer"}`);
+        (!Number.isSafeInteger(config[field]) || config[field] < 1)) {
+      throw new Error(`API config field "${field}" must be a positive integer`);
     }
   }
   return config;

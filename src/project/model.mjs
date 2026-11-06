@@ -42,6 +42,30 @@ export function createProject({ name, importer, imported, importedAt = new Date(
   return assertProject(project, name);
 }
 
+// Settings that belong to a project rather than to the machine: they describe how this project is
+// translated, so a value entered in the UI for one project must not follow the reader to another.
+// Every field is optional; an absent one falls back to the saved API config and then to the
+// built-in default, which keeps older projects readable.
+export const PROJECT_OPTION_FIELDS = Object.freeze([
+  "from", "to", "limit", "concurrency", "attempts", "contextEntriesPerSide",
+]);
+
+function assertProjectOptions(options, name) {
+  if (options === undefined) return;
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    throw new Error(`Project "${name}" has invalid options`);
+  }
+  for (const [field, value] of Object.entries(options)) {
+    if (!PROJECT_OPTION_FIELDS.includes(field)) {
+      throw new Error(`Project "${name}" has unsupported option "${field}"`);
+    }
+    const minimum = field === "contextEntriesPerSide" ? 0 : 1;
+    if (!Number.isSafeInteger(value) || value < minimum) {
+      throw new Error(`Project "${name}" option "${field}" must be ${minimum === 0 ? "a non-negative" : "a positive"} integer`);
+    }
+  }
+}
+
 export function assertProject(project, name) {
   if (!project || typeof project !== "object" || Array.isArray(project)) {
     throw new Error(`Project "${name}" is not an object`);
@@ -65,6 +89,7 @@ export function assertProject(project, name) {
   if (project.batches !== undefined) {
     throw new Error(`Project "${name}" must not carry batches; entries belong in the pool`);
   }
+  assertProjectOptions(project.options, name);
   return project;
 }
 

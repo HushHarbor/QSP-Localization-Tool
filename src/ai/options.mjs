@@ -1,12 +1,14 @@
 // Resolve one translation run from request values, environment variables, and saved config.
-import { DEFAULT_CONTEXT_ENTRIES_PER_SIDE, normalizeBaseUrl, resolveApiKey } from "./api-config.mjs";
+import { normalizeBaseUrl, resolveApiKey } from "./api-config.mjs";
 
+// The saved API config can still supply timeoutMs and maxOutputTokens. The run-scoped numbers in
+// this table come from the request or from here only, because they are stored per project.
 const NUMERIC = {
   concurrency: 6,
   attempts: 2,
   timeoutMs: 180000,
   maxOutputTokens: 4096,
-  contextEntriesPerSide: DEFAULT_CONTEXT_ENTRIES_PER_SIDE,
+  contextEntriesPerSide: 3,
 };
 const OPTIONAL = ["from", "to", "limit"];
 

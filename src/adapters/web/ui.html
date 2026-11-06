@@ -236,6 +236,8 @@
   textarea { resize: vertical; min-height: 60px; }
   .row { display: flex; gap: .55rem; }
   .row > * { flex: 1; min-width: 0; }
+  /* Keep the inputs of a row on one line even when a label wraps. */
+  .row > div { display: flex; flex-direction: column; justify-content: flex-end; }
   .stack > * + * { margin-top: .6rem; }
   .muted { color: var(--text-muted); font-size: .82rem; }
   .hint { color: var(--text-faint); font-size: .8rem; margin-top: .45rem; }
@@ -572,10 +574,6 @@
         <div><label for="api-model" data-i18n="api.model">模型</label><input id="api-model"></div>
         <div><label for="api-key" data-i18n="api.key">API Key（留空保持不变）</label><input id="api-key" type="password" autocomplete="off"></div>
         <div class="row">
-          <div><label for="api-conc" data-i18n="api.concurrency">并发</label><input id="api-conc" type="number" min="1"></div>
-          <div><label for="api-attempts" data-i18n="api.attempts">重试</label><input id="api-attempts" type="number" min="1"></div>
-        </div>
-        <div class="row">
           <button id="api-save" class="primary" data-i18n="action.save">保存</button>
           <button id="api-test" class="ghost" data-i18n="api.test">测试连接</button>
         </div>
@@ -613,6 +611,11 @@
           <div><label for="tr-limit" data-i18n="translate.limit">本次上限</label><input id="tr-limit" type="number" min="1" data-i18n-ph="translate.limitPlaceholder" placeholder="不限"></div>
           <div><label for="tr-conc" data-i18n="api.concurrency">并发</label><input id="tr-conc" type="number" min="1" placeholder="6"></div>
         </div>
+        <div class="row">
+          <div><label for="tr-attempts" data-i18n="api.attempts">重试</label><input id="tr-attempts" type="number" min="1" placeholder="2"></div>
+          <div><label for="tr-context" data-i18n="translate.context">上下文条目数（每侧）</label><input id="tr-context" type="number" min="0" placeholder="3"></div>
+        </div>
+        <div class="hint" data-i18n="translate.contextHint">译一条时，把它前后各若干条已有译文一并附在提示词里作参照；0 表示不带上下文。</div>
         <button class="primary" id="translate-run" data-i18n="translate.run">开始翻译</button>
       </div>
     </section>
@@ -735,7 +738,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   project: "", statuses: "", query: "", regex: false, offset: 0, limit: 50,
   entries: [], dirty: new Map(), jobId: null, job: null, poll: null, jobDismissed: null,
-  shutdown: false, entriesVersion: "", entriesScope: "",
+  shutdown: false, entriesVersion: "", entriesScope: "", apiDefaults: null,
   logs: {
     status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
     detail: new Map(), signature: "", version: "", scope: "", counts: {}, previews: new Set(),
@@ -803,6 +806,8 @@ const MESSAGES = {
     "translate.limit": "Run limit",
     "translate.limitPlaceholder": "no limit",
     "translate.run": "Start translation",
+    "translate.context": "Context entries (each side)",
+    "translate.contextHint": "Each entry is sent with that many already-translated neighbours before and after it; 0 sends none.",
     "build.heading": "Export",
     "build.dir": "Directory (required)",
     "build.dirPlaceholder": "Where to write the file",
@@ -934,6 +939,8 @@ const MESSAGES = {
     "translate.limit": "本次上限",
     "translate.limitPlaceholder": "不限",
     "translate.run": "开始翻译",
+    "translate.context": "上下文条目数（每侧）",
+    "translate.contextHint": "译一条时，把它前后各若干条已有译文一并附在提示词里作参照；0 表示不带上下文。",
     "build.heading": "导出",
     "build.dir": "目录（必填）",
     "build.dirPlaceholder": "导出到哪个目录",
@@ -1096,10 +1103,11 @@ function notify(text, kind = "info") {
 // and export cards are locked for the same reason: their buttons do nothing while a job runs, and
 // a filled-in form that cannot be submitted is worse than a visibly disabled one.
 const LOCKED_WHILE_BUSY = [
-  "api-base", "api-model", "api-key", "api-conc", "api-attempts", "api-save", "api-test",
+  "api-base", "api-model", "api-key", "api-save", "api-test",
   "prompts-text", "prompts-save", "glossary-text", "glossary-save",
   "import-file-button", "import-name", "import-importer", "import-rebuild",
   "build-dir", "build-name", "build-raw",
+  "tr-from", "tr-to", "tr-limit", "tr-conc", "tr-attempts", "tr-context",
 ];
 
 function setBusy(busy) {
@@ -1131,8 +1139,12 @@ async function loadState(select = state.project) {
   const api = data.api || {};
   $("api-base").value = api.baseUrl || "";
   $("api-model").value = api.model || "";
-  $("api-conc").value = api.concurrency || 6;
-  $("api-attempts").value = api.attempts || 2;
+  // What a field falls back to when the project has not stored its own value.
+  state.apiDefaults = {
+    concurrency: api.concurrency || 6,
+    attempts: api.attempts || 2,
+    contextEntriesPerSide: api.contextEntriesPerSide ?? 3,
+  };
   if (data.incompatible?.length) {
     notify(t("project.incompatible", { count: data.incompatible.length }), "error");
   }
@@ -1188,6 +1200,7 @@ async function selectProject(name, { loadEditor = true, keepDirty = false } = {}
     }))}</div>` +
     `<div>${esc(t("project.layout"))}</div>`;
   renderSummary(info.summary);
+  fillRunOptions(info.options || {});
   $("build-name").value = $("build-raw").checked ? info.rawOutputName : info.outputName;
   if (loadEditor) await loadEditorContent();
   await loadEntries({ keepDirty });
@@ -1199,6 +1212,21 @@ function updateEditorScope() {
   $("editor-scope").textContent = state.project
     ? t("editor.scopeProject", { name: state.project })
     : t("editor.scopeGlobal");
+}
+
+// The run panel shows what this project remembers, and falls back to the saved API config for a
+// field the project never stored. The boxes therefore always say what a run would use right now.
+const RUN_FIELDS = [
+  ["from", "tr-from"], ["to", "tr-to"], ["limit", "tr-limit"],
+  ["concurrency", "tr-conc"], ["attempts", "tr-attempts"], ["contextEntriesPerSide", "tr-context"],
+];
+
+function fillRunOptions(options = {}) {
+  const fallback = state.apiDefaults || {};
+  for (const [field, element] of RUN_FIELDS) {
+    const value = options[field] ?? fallback[field];
+    $(element).value = value ?? "";
+  }
 }
 
 async function loadEditorContent() {
@@ -1839,8 +1867,6 @@ $("api-save").addEventListener("click", async () => {
     const body = {
       baseUrl: $("api-base").value.trim(),
       model: $("api-model").value.trim(),
-      concurrency: Number($("api-conc").value),
-      attempts: Number($("api-attempts").value),
     };
     if ($("api-key").value) body.apiKey = $("api-key").value;
     await request("/api/api-config", {
@@ -1902,7 +1928,10 @@ $("import-run").addEventListener("click", async () => {
 $("translate-run").addEventListener("click", () => {
   if (!state.project) return notify(t("project.required"), "error");
   const body = { project: state.project };
-  for (const [field, element] of [["from", "tr-from"], ["to", "tr-to"], ["limit", "tr-limit"], ["concurrency", "tr-conc"]]) {
+  for (const [field, element] of [
+    ["from", "tr-from"], ["to", "tr-to"], ["limit", "tr-limit"], ["concurrency", "tr-conc"],
+    ["attempts", "tr-attempts"], ["contextEntriesPerSide", "tr-context"],
+  ]) {
     const value = $(element).value.trim();
     if (value) body[field] = Number(value);
   }

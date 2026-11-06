@@ -16,6 +16,8 @@ import { readPromptTable, writePromptTable } from "../../ai/prompts.mjs";
 import { listRequestLogs, readRequestLog } from "../../ai/request-log.mjs";
 import { projectInfo } from "../../application/project-info.mjs";
 import { editPool, listEntries, reopenPool } from "../../application/edit-pool.mjs";
+import { updateProjectOptions } from "../../application/project-options.mjs";
+import { PROJECT_OPTION_FIELDS } from "../../project/model.mjs";
 import { invalidatePoolSnapshot, readPoolSnapshot } from "../../project/snapshot.mjs";
 import { notePoolBatchWritten } from "../../project/pool-writes.mjs";
 import {
@@ -468,13 +470,19 @@ function createHandler(onShutdown) {
         const body = await readJsonBody(request);
         const name = requireProject(body.project);
         const requestOptions = { name };
-        for (const field of ["from", "to", "limit", "concurrency", "attempts"]) {
+        for (const field of ["from", "to", "limit", "concurrency", "attempts", "contextEntriesPerSide"]) {
           if (body[field] !== undefined && body[field] !== "") requestOptions[field] = Number(body[field]);
         }
         for (const field of ["base", "model"]) {
           if (typeof body[field] === "string" && body[field].trim()) requestOptions[field] = body[field].trim();
         }
         const options = resolveAiOptions(requestOptions, readApiConfig());
+        // The run parameters become the project's remembered settings, so the next visit to this
+        // project shows the same batch range, concurrency, and context width.
+        updateProjectOptions(name, Object.fromEntries(
+          PROJECT_OPTION_FIELDS.filter((field) => options[field] !== undefined)
+            .map((field) => [field, options[field]]),
+        ));
         // The page compares against the pool as it stood when the job started, so the snapshot is
         // taken before the first batch can land. It is released when the job ends.
         readPoolSnapshot(loadProject(name));
