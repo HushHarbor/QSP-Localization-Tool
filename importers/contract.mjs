@@ -239,6 +239,18 @@ export function markerPattern(slots, { global = false } = {}) {
   return new RegExp(`${escaped}(\\d+)\u27e7`, global ? "g" : "");
 }
 
+// A model sometimes closes a marker with a look-alike glyph: the closing bracket is one
+// character, so a near miss reads as ordinary text and the marker is reported as lost.
+// The set stays closed to shaped brackets seen in real answers; a marker followed by prose is
+// still lost, because that boundary cannot be guessed without swallowing the next word.
+const CONFUSABLE_CLOSERS = "\u27e9\u27eb\u27dd\u27f8\u232a\u3009";
+
+function normalizeMarkerClosers(text, slots) {
+  const escaped = markerPrefixOf(slots).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`${escaped}\\d+([${CONFUSABLE_CLOSERS}])`, "g");
+  return String(text).replace(pattern, (match) => `${match.slice(0, -1)}\u27e7`);
+}
+
 export function maskStructure(source, slots = [], pattern) {
   if (!(pattern instanceof RegExp) || !pattern.global) {
     throw new Error("maskStructure requires the importer's global mask pattern");
@@ -260,7 +272,8 @@ export function maskStructure(source, slots = [], pattern) {
 export function unmaskStructure(text, slots) {
   const counts = new Map();
   const unexpected = new Set();
-  const output = String(text).replace(markerPattern(slots, { global: true }), (match, number) => {
+  const answer = normalizeMarkerClosers(text, slots);
+  const output = answer.replace(markerPattern(slots, { global: true }), (match, number) => {
     const index = Number(number);
     if (!Number.isSafeInteger(index) || index >= slots.length || String(index) !== number) {
       unexpected.add(match);
