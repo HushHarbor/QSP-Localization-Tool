@@ -396,7 +396,7 @@
   .log-entry { display: flex; flex-direction: column; gap: .45rem; }
   .log-row {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     align-items: center;
     gap: .6rem;
     padding: .45rem .6rem;
@@ -414,6 +414,32 @@
   .log-meta b { color: var(--text); font-weight: 650; }
   .log-chev { color: var(--text-faint); font-size: .7rem; transition: transform .2s ease; }
   .log-row.open .log-chev { transform: rotate(90deg); color: var(--rose); }
+  /* A small button on the row: the row itself opens the whole record, which is far more than a
+     reader scanning the list wants, so the answer gets its own one-line disclosure. */
+  .log-preview-toggle {
+    padding: .05rem .45rem;
+    font-size: .72rem;
+    color: var(--text-muted);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: .4rem;
+    cursor: pointer;
+  }
+  .log-preview-toggle:hover { border-color: #f3bccf; color: var(--rose); }
+  .log-preview-toggle.active { border-color: var(--rose); color: var(--rose); background: #fff6fa; }
+  .log-response {
+    margin: -.2rem 0 .1rem;
+    padding: .45rem .7rem;
+    border-left: 2px solid #f3bccf;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: #fffafc;
+    color: var(--text);
+    font-size: .8rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .log-response.empty { color: var(--text-faint); font-style: italic; }
   .log-detail {
     margin: -.2rem 0 .2rem;
     padding: .7rem .8rem;
@@ -666,6 +692,7 @@
       <div class="row" style="margin-top:.6rem">
         <span class="muted" id="log-hint" data-i18n="project.none">未选择项目</span>
         <span></span>
+        <button id="log-aborted" class="chip" style="flex:0 0 auto" data-i18n="log.showAborted">已中止</button>
         <button id="log-refresh" class="ghost" style="flex:0 0 auto" data-i18n="action.refresh">刷新</button>
       </div>
       <div class="log-entry" id="log-list" style="margin-top:.6rem"></div>
@@ -702,7 +729,8 @@ const state = {
   shutdown: false, entriesVersion: "", entriesScope: "",
   logs: {
     status: "", query: "", offset: 0, limit: 30, rows: [], hasMore: false, open: "",
-    detail: new Map(), signature: "", version: "", scope: "", counts: {},
+    detail: new Map(), signature: "", version: "", scope: "", counts: {}, previews: new Set(),
+    showAborted: false,
   },
 };
 
@@ -814,6 +842,11 @@ const MESSAGES = {
     "logState.paused": "Paused",
     "logState.stopped": "Stopped",
     "log.copy": "Copy JSON",
+    "log.preview": "Answer",
+    "log.previewTitle": "Show what the model returned",
+    "log.previewEmpty": "The record holds no answer",
+    "log.showAborted": "Interrupted",
+    "log.showAbortedTitle": "Stopped runs leave one of these per request; hidden unless switched on",
     "log.copied": "Request record copied",
     "log.clipboardDenied": "The browser blocked clipboard access",
     "log.loading": "Loading…",
@@ -940,6 +973,11 @@ const MESSAGES = {
     "logState.paused": "已暂停",
     "logState.stopped": "已停止",
     "log.copy": "复制 JSON",
+    "log.preview": "译文",
+    "log.previewTitle": "展开显示模型返回的内容",
+    "log.previewEmpty": "记录里没有返回内容",
+    "log.showAborted": "已中止",
+    "log.showAbortedTitle": "停止任务时每个未完成的请求留一条；默认不显示",
     "log.copied": "已复制请求记录",
     "log.clipboardDenied": "浏览器不允许访问剪贴板",
     "log.loading": "读取中…",
@@ -1001,6 +1039,10 @@ async function setLanguage(next) {
   updateEditorScope();
   refreshFileName();
   renderLogSummary();
+  syncAbortedToggle();
+  // The rows carry their own controls and any open answer, so they need repainting too; the
+  // follow tick would skip it because the data itself did not change.
+  renderLogRows();
   if (state.project) {
     await selectProject(state.project, { loadEditor: false, keepDirty: true });
   } else {
@@ -1098,7 +1140,7 @@ async function selectProject(name, { loadEditor = true, keepDirty = false } = {}
   if (changed) {
     state.logs = {
       ...state.logs, offset: 0, open: "", rows: [], hasMore: false, detail: new Map(),
-      signature: "", version: "", scope: "", counts: {},
+      signature: "", version: "", scope: "", counts: {}, previews: new Set(),
     };
     $("log-list").replaceChildren();
     $("log-page").textContent = "";
@@ -1579,7 +1621,21 @@ function renderLogRows() {
     const chev = document.createElement("span");
     chev.className = "log-chev";
     chev.textContent = "▶";
-    item.append(time, badge, meta, chev);
+    // The row opens the whole record; this opens just the answer, which is what the list is
+    // usually read for. It keeps its own state so a follow tick does not close it.
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.className = "log-preview-toggle";
+    preview.textContent = t("log.preview");
+    preview.title = t("log.previewTitle");
+    const previewOpen = state.logs.previews.has(row.requestId);
+    if (previewOpen) preview.classList.add("active");
+    preview.setAttribute("aria-expanded", String(previewOpen));
+    preview.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleLogPreview(row.requestId);
+    });
+    item.append(time, badge, meta, preview, chev);
     item.addEventListener("click", () => toggleLog(row.requestId));
     item.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
@@ -1587,8 +1643,22 @@ function renderLogRows() {
       toggleLog(row.requestId);
     });
     list.append(item);
+    if (previewOpen) list.append(logResponse(row));
     if (row.requestId === state.logs.open) list.append(logDetail(row.requestId));
   }
+}
+
+// The answer alone, one paragraph, in the same place under every row that has one saved.
+function logResponse(row) {
+  const box = document.createElement("div");
+  box.className = "log-response";
+  const answer = String(row.response || "").trim();
+  if (answer) box.textContent = answer;
+  else {
+    box.classList.add("empty");
+    box.textContent = t("log.previewEmpty");
+  }
+  return box;
 }
 
 function renderLogSummary() {
@@ -1611,6 +1681,15 @@ function renderLogSummary() {
   }
 }
 
+// The button is lit when interrupted records are included, so an unlit button means "there are
+// none in this list", which is the usual case while a run is going well.
+function syncAbortedToggle() {
+  const button = $("log-aborted");
+  button.classList.toggle("active", state.logs.showAborted);
+  button.setAttribute("aria-pressed", String(state.logs.showAborted));
+  button.title = t("log.showAbortedTitle");
+}
+
 async function loadLogs({ force = false } = {}) {
   if (!state.project) {
     $("log-hint").textContent = t("project.none");
@@ -1621,7 +1700,8 @@ async function loadLogs({ force = false } = {}) {
   const seq = ++logReadSeq;
   // The remembered version only describes the current filter and page. Changing either one asks
   // a different question, so the cached answer must not be reused.
-  const scope = [state.logs.status, state.logs.query, state.logs.offset, state.logs.limit].join("|");
+  const scope = [state.logs.status, state.logs.query, state.logs.offset, state.logs.limit,
+    state.logs.showAborted].join("|");
   if (scope !== state.logs.scope) {
     state.logs.scope = scope;
     state.logs.version = "";
@@ -1631,6 +1711,7 @@ async function loadLogs({ force = false } = {}) {
   });
   if (state.logs.status) params.set("status", state.logs.status);
   if (state.logs.query) params.set("q", state.logs.query);
+  if (state.logs.showAborted) params.set("hideAborted", "0");
   // A manual refresh ignores the remembered version so it always rescans; a follow tick asks the
   // server to skip the work when the directory and the writer counter both stand still.
   if (!force && state.logs.version) params.set("since", state.logs.version);
@@ -1654,6 +1735,12 @@ async function loadLogs({ force = false } = {}) {
   const signature = logsSignature(data);
   if (!force && signature === state.logs.signature) return;
   state.logs.signature = signature;
+  renderLogRows();
+}
+
+function toggleLogPreview(requestId) {
+  if (state.logs.previews.has(requestId)) state.logs.previews.delete(requestId);
+  else state.logs.previews.add(requestId);
   renderLogRows();
 }
 
@@ -1912,6 +1999,14 @@ function runLogSearch() {
 $("log-search-run").addEventListener("click", runLogSearch);
 $("log-search").addEventListener("keydown", (event) => { if (event.key === "Enter") runLogSearch(); });
 $("log-refresh").addEventListener("click", () => loadLogs({ force: true }).catch((error) => notify(error.message, "error")));
+$("log-aborted").addEventListener("click", () => {
+  state.logs.showAborted = !state.logs.showAborted;
+  state.logs.offset = 0;
+  state.logs.open = "";
+  syncAbortedToggle();
+  loadLogs().catch((error) => notify(error.message, "error"));
+});
+syncAbortedToggle();
 $("log-prev").addEventListener("click", () => {
   state.logs.offset = Math.max(0, state.logs.offset - state.logs.limit);
   state.logs.open = "";

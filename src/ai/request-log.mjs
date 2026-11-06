@@ -13,6 +13,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
 const STATUSES = new Set(["started", "completed", "failed", "aborted"]);
 const MAX_PAGE = 200;
+// One entry is a paragraph, so an answer is short. The cap only guards a runaway response from
+// bloating a list page, which carries one of these per row.
+const MAX_RESPONSE = 2000;
 
 export const requestLogDir = (project) => join(logDir(project), "ai-requests");
 export const requestLogFile = (project, requestId) => join(requestLogDir(project), `${requestId}.json`);
@@ -70,6 +73,9 @@ function summaryOf(record) {
     httpStatus: http.status ?? null,
     usage: record.usage || http.usage || null,
     error: record.error?.message || null,
+    // What the model answered, so the list can show the translation next to the request without
+    // a second round trip for the full record.
+    response: typeof record.response === "string" ? record.response.slice(0, MAX_RESPONSE) : null,
   };
 }
 
@@ -96,7 +102,7 @@ function parseStatuses(value) {
 // would otherwise claim the directory holds less than it does. Search reads text, which the index
 // does not keep, so it parses each candidate.
 export function listRequestLogs(project, {
-  status = "", query = "", offset = 0, limit = 50, since = "",
+  status = "", query = "", offset = 0, limit = 50, since = "", hideAborted = false,
 } = {}) {
   const statuses = parseStatuses(status);
   const needle = String(query || "").trim().toLowerCase();
@@ -131,7 +137,7 @@ export function listRequestLogs(project, {
   const index = indexLogFiles(project, files);
   result.totalFiles = files.length;
   result.damaged = index.damaged;
-  result.counts = countLogStatuses(index.entries);
+  result.counts = countLogStatuses(index.entries, { hideAborted });
 
   // A file read for its status is not read a second time for its row.
   const recordOf = (file) => {
@@ -147,6 +153,7 @@ export function listRequestLogs(project, {
   for (const file of files) {
     const known = index.entries.get(file.name);
     if (!known || known.status === null) continue;
+    if (hideAborted && known.status === "aborted") continue;
     if (statuses && !statuses.has(known.status)) continue;
     let record = null;
     let parsed = false;

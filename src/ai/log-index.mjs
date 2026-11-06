@@ -50,10 +50,13 @@ export function indexLogFiles(projectName, files) {
 }
 
 // Totals over the whole directory, from the index rather than from the files a page shows.
-export function countLogStatuses(entries) {
+// `hideAborted` leaves out records a stopped run produced, so their total disappears with them
+// instead of sitting at the top of the panel forever.
+export function countLogStatuses(entries, { hideAborted = false } = {}) {
   const counts = {};
   for (const entry of entries.values()) {
     if (entry.status === null) continue;
+    if (hideAborted && entry.status === "aborted") continue;
     counts[entry.status] = (counts[entry.status] || 0) + 1;
   }
   return counts;

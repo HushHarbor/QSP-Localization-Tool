@@ -261,6 +261,8 @@ function createHandler(onShutdown) {
           offset: Number(url.searchParams.get("offset") || 0),
           limit: Number(url.searchParams.get("limit") || 50),
           since: url.searchParams.get("since") || "",
+          // Records a stopped run left behind are hidden unless the reader asks for them.
+          hideAborted: url.searchParams.get("hideAborted") !== "0",
         }));
         return;
       }

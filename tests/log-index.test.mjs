@@ -125,3 +125,27 @@ test("an unreadable file is reported once and never read on every pass", (t) => 
   assert.equal(second.damaged, 1, "the count stays, the read does not");
   assert.equal(second.scanned, 1);
 });
+
+// Stopping a run leaves one record per request it had in flight. They are history, not work, so
+// the list hides them unless the reader asks to see them.
+test("interrupted records stay out of the list and the totals by default", (t) => {
+  const name = uniqueName("log-aborted");
+  setup(t, name);
+  writeRequestLog(name, record(name, "completed"));
+  writeRequestLog(name, record(name, "aborted"));
+  writeRequestLog(name, record(name, "aborted"));
+
+  const hidden = listRequestLogs(name, { limit: 10, hideAborted: true });
+  assert.equal(hidden.rows.length, 1);
+  assert.equal(hidden.rows[0].status, "completed");
+  assert.deepEqual(hidden.counts, { completed: 1 });
+  assert.equal(hidden.totalFiles, 3, "the files are still there");
+
+  const shown = listRequestLogs(name, { limit: 10 });
+  assert.equal(shown.rows.length, 3);
+  assert.deepEqual(shown.counts, { completed: 1, aborted: 2 });
+
+  // Paging counts only what is shown, so a page cannot claim more rows than the list holds.
+  const firstPage = listRequestLogs(name, { limit: 1, hideAborted: true });
+  assert.equal(firstPage.hasMore, false);
+});
