@@ -247,8 +247,13 @@ const CONFUSABLE_CLOSERS = "\u27e9\u27eb\u27dd\u27f8\u232a\u3009";
 
 function normalizeMarkerClosers(text, slots) {
   const escaped = markerPrefixOf(slots).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`${escaped}\\d+([${CONFUSABLE_CLOSERS}])`, "g");
-  return String(text).replace(pattern, (match) => `${match.slice(0, -1)}\u27e7`);
+  const confusable = new RegExp(`${escaped}\\d+([${CONFUSABLE_CLOSERS}])`, "g");
+  const normalized = String(text).replace(confusable, (match) => `${match.slice(0, -1)}\u27e7`);
+  // An answer that ends inside its last marker is otherwise complete: nothing follows it, so
+  // closing it here cannot swallow text that belongs to the translation. A marker followed by
+  // prose is a different case and stays lost.
+  const trailing = new RegExp(`(${escaped}\\d+)(\\s*)$`);
+  return normalized.replace(trailing, (match, marker, space) => `${marker}\u27e7${space}`);
 }
 
 export function maskStructure(source, slots = [], pattern) {

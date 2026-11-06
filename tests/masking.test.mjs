@@ -1,10 +1,29 @@
-// Structural markers must survive a model that closes them with a look-alike glyph.
+// Structural markers must survive a model that closes them with a look-alike glyph, or that
+// stops writing right after the last one.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { maskStructure, unmaskStructure } from "../importers/contract.mjs";
 import { MASK_PATTERN } from "../importers/twine/index.mjs";
 
 const mask = (source) => maskStructure(source, [], MASK_PATTERN);
+
+test("an answer that ends inside its last marker is closed and restored", () => {
+  const { text, slots } = mask("<i>her hand</i>");
+  // The model translated everything and then stopped on the marker itself.
+  const answer = text.replace(/\u27e7$/u, "");
+  assert.equal(unmaskStructure(answer, slots), "<i>her hand</i>");
+});
+
+test("trailing whitespace after an unfinished marker survives the repair", () => {
+  const { text, slots } = mask("a <b>b");
+  const answer = `${text}\n`;
+  assert.equal(unmaskStructure(answer, slots), "a <b>b\n");
+});
+
+test("a trailing marker number outside the slot table is still rejected", () => {
+  const { text, slots } = mask("a <b>b");
+  assert.throws(() => unmaskStructure(`${text}\u27e6SLOT_9`, slots), /unexpected placeholder tokens/);
+});
 
 test("a marker closed with a look-alike bracket still restores its token", () => {
   const { text, slots } = mask("He said <b>hello</b>.");
